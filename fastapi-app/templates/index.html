@@ -5,28 +5,156 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>To-Do List</title>
     <style>
-        body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+        :root {
+            --bg-from: #eef2ff;
+            --bg-to: #f5f3ff;
+            --card: #ffffff;
+            --ink: #1f2430;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --accent: #6366f1;
+            --accent-ink: #ffffff;
+            --danger: #ef4444;
+            --danger-bg: #fef2f2;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+            max-width: 640px;
+            margin: 3rem auto;
+            padding: 0 1rem;
+            color: var(--ink);
+            background: linear-gradient(160deg, var(--bg-from), var(--bg-to));
+            min-height: 100vh;
+        }
+        h1 {
+            font-size: 1.6rem;
+            margin: 0 0 1.25rem;
+            letter-spacing: -.02rem;
+        }
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 10px 30px -12px rgba(30, 41, 59, .18);
+        }
         form { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
-        input[type="text"] { flex: 1 1 12rem; padding: .5rem; }
-        ul { list-style: none; padding: 0; }
-        li { display: flex; align-items: center; gap: .5rem; padding: .4rem 0; border-bottom: 1px solid #e5e5e5; }
-        li span { flex: 1; }
-        .done { text-decoration: line-through; color: #888; }
-        #error { color: #b00020; }
+        input[type="text"] {
+            flex: 1 1 12rem;
+            padding: .6rem .75rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: .95rem;
+            outline: none;
+            transition: border-color .15s, box-shadow .15s;
+        }
+        input[type="text"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgb(99 102 241 / .15);
+        }
+        button {
+            border: none;
+            border-radius: 10px;
+            padding: .6rem 1rem;
+            font-size: .9rem;
+            cursor: pointer;
+            transition: transform .1s, opacity .15s, background .15s;
+        }
+        button:active { transform: scale(.97); }
+        form button[type="submit"] {
+            background: var(--accent);
+            color: var(--accent-ink);
+            font-weight: 600;
+        }
+        form button[type="submit"]:hover { opacity: .9; }
+        #error {
+            color: #991b1b;
+            background: var(--danger-bg);
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: .6rem .75rem;
+            margin: 0 0 1rem;
+            font-size: .875rem;
+        }
+        #filters {
+            display: flex;
+            gap: .4rem;
+            align-items: center;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border);
+        }
+        #filters button[data-filter] {
+            background: transparent;
+            color: var(--muted);
+            padding: .35rem .8rem;
+            border-radius: 999px;
+        }
+        #filters button[data-filter]:hover { background: #f3f4f6; }
+        #filters button.active {
+            background: var(--accent);
+            color: var(--accent-ink);
+            font-weight: 600;
+        }
+        #count {
+            color: var(--muted);
+            font-size: .85rem;
+            margin-left: auto;
+        }
+        ul { list-style: none; padding: 0; margin: 0; }
+        li {
+            display: flex;
+            align-items: center;
+            gap: .7rem;
+            padding: .65rem .25rem;
+            border-bottom: 1px solid var(--border);
+        }
+        li:last-child { border-bottom: none; }
+        li input[type="checkbox"] {
+            width: 1.15rem;
+            height: 1.15rem;
+            accent-color: var(--accent);
+            cursor: pointer;
+            flex: none;
+        }
+        li span { flex: 1; word-break: break-word; }
+        .done { text-decoration: line-through; color: var(--muted); }
+        li button {
+            background: #f3f4f6;
+            color: var(--ink);
+            font-size: .8rem;
+            padding: .4rem .7rem;
+        }
+        li button:hover { background: #e5e7eb; }
+        li button:last-child {
+            background: var(--danger-bg);
+            color: var(--danger);
+        }
+        li button:last-child:hover { background: #fee2e2; }
     </style>
 </head>
 <body>
-    <h1>To-Do List</h1>
-    <form id="todo-form">
-        <input type="text" id="title" placeholder="제목 (예: 20231234)" required>
-        <input type="text" id="description" placeholder="설명 (예: 홍길동)">
-        <button type="submit">Add To-Do</button>
-    </form>
-    <p id="error" role="alert" hidden></p>
-    <ul id="todo-list"></ul>
+    <h1>📝 To-Do List</h1>
+    <div class="card">
+        <form id="todo-form">
+            <input type="text" id="title" placeholder="제목 (예: 20231234)" required>
+            <input type="text" id="description" placeholder="설명 (예: 홍길동)">
+            <button type="submit">추가</button>
+        </form>
+        <p id="error" role="alert" hidden></p>
+        <div id="filters">
+            <button data-filter="all" class="active">전체</button>
+            <button data-filter="active">진행중</button>
+            <button data-filter="completed">완료</button>
+            <span id="count"></span>
+        </div>
+        <ul id="todo-list"></ul>
+    </div>
     <script>
         const $ = (id) => document.getElementById(id);
-        const listEl = $("todo-list"), errorEl = $("error");
+        const listEl = $("todo-list"), errorEl = $("error"), countEl = $("count");
+        let allTodos = [];
+        let filter = "all";
 
         // 모든 요청을 한 곳에서 처리하고, 실패는 조용히 넘기지 않는다
         async function api(url, method = "GET", body) {
@@ -48,14 +176,32 @@
           }
         }
 
-        const load = () => run("목록 불러오기", async () => render(await api("/todos")));
+        const load = () => run("목록 불러오기", async () => { allTodos = await api("/todos"); render(); });
         const save = (id, todo) => run("수정", async () => { await api(`/todos/${id}`, "PUT", todo); await load(); });
 
         function button(label, onclick) {
           return Object.assign(document.createElement("button"), { textContent: label, onclick });
         }
 
-        function render(todos) {
+        function setFilter(next) {
+          filter = next;
+          for (const btn of document.querySelectorAll("#filters button[data-filter]")) {
+            btn.classList.toggle("active", btn.dataset.filter === filter);
+          }
+          render();
+        }
+
+        for (const btn of document.querySelectorAll("#filters button[data-filter]")) {
+          btn.onclick = () => setFilter(btn.dataset.filter);
+        }
+
+        function render() {
+          const todos = allTodos.filter((todo) => {
+            if (filter === "active") return !todo.completed;
+            if (filter === "completed") return todo.completed;
+            return true;
+          });
+          countEl.textContent = `${allTodos.filter((t) => !t.completed).length}개 남음`;
           listEl.replaceChildren(...todos.map((todo) => {
             const check = Object.assign(document.createElement("input"), {
               type: "checkbox",
@@ -67,7 +213,7 @@
               className: todo.completed ? "done" : "",
             });
             const li = document.createElement("li");
-            li.append(check, text, button("Edit", () => edit(todo)), button("Delete", () => remove(todo.id)));
+            li.append(check, text, button("수정", () => edit(todo)), button("삭제", () => remove(todo.id)));
             return li;
           }));
         }
@@ -75,6 +221,11 @@
         function edit(todo) {
           const title = prompt("새 제목:", todo.title);
           if (title === null) return;
+          if (!title.trim()) {
+            errorEl.textContent = "수정 실패: 제목은 공백만으로 입력할 수 없습니다";
+            errorEl.hidden = false;
+            return;
+          }
           const description = prompt("새 설명:", todo.description);
           if (description === null) return;
           save(todo.id, { ...todo, title: title.trim(), description: description.trim() });
@@ -87,8 +238,14 @@
 
         $("todo-form").onsubmit = (event) => {
           event.preventDefault();
+          const title = $("title").value.trim();
+          if (!title) {
+            errorEl.textContent = "추가 실패: 제목은 공백만으로 입력할 수 없습니다";
+            errorEl.hidden = false;
+            return;
+          }
           run("추가", async () => {
-            await api("/todos", "POST", { title: $("title").value.trim(), description: $("description").value.trim() });
+            await api("/todos", "POST", { title, description: $("description").value.trim() });
             event.target.reset();
             await load();
           });

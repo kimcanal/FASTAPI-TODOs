@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 BASE_DIR = Path(__file__).resolve().parent       # main.py 가 있는 폴더
 TODO_FILE = BASE_DIR / "todo.json"
@@ -19,6 +19,15 @@ class TodoIn(BaseModel):                         # 클라이언트가 보내는 
     title: str = Field(min_length=1, max_length=100)
     description: str = ""
     completed: bool = False
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        # [수정] "   " 처럼 공백만 있는 제목이 min_length 검사를 통과해 저장되던 결함
+        stripped = value.strip()
+        if not stripped:
+            raise ValueError("제목은 공백만으로 이루어질 수 없습니다")
+        return stripped
 
 
 class TodoItem(TodoIn):                          # 서버가 돌려주는 데이터 (id 있음)
@@ -42,9 +51,12 @@ def find_index(todos: list[TodoItem], todo_id: int) -> int:
     raise HTTPException(404, "To-Do item not found")
 
 
-@app.get("/todos")                               # 목록 조회
-def get_todos() -> list[TodoItem]:
-    return load_todos()
+@app.get("/todos")                               # 목록 조회 (completed로 필터링 가능)
+def get_todos(completed: bool | None = None) -> list[TodoItem]:
+    todos = load_todos()
+    if completed is None:
+        return todos
+    return [t for t in todos if t.completed == completed]
 
 
 @app.post("/todos", status_code=201)             # 추가 — id 는 서버가 매긴다
