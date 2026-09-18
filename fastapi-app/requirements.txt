@@ -1,2 +1,3 @@
 fastapi[standard]
 markdown-it-py
+itsdangerous

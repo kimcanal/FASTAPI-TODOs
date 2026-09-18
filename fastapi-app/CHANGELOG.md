@@ -3,6 +3,19 @@
 이 프로젝트의 주요 변경 사항을 기록합니다.
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따릅니다.
 
+## [2.0.0] - 2026-09-18
+
+### Added
+
+- 회원가입/로그인/로그아웃 (`/auth/register`, `/auth/login`, `/auth/logout`, `/auth/me`), 세션 쿠키 기반
+- 할 일 데이터를 SQLite(`todo.db`)로 이전, 계정별로 완전히 분리해서 저장
+- 로그인하지 않으면 `/`가 `/login` 화면으로 리다이렉트됨
+
+### Changed
+
+- **[BREAKING]** `/todos` API 전체가 로그인을 요구하도록 변경됨 (비로그인 요청은 401)
+- 기존 `todo.json`의 데이터는 더 이상 자동으로 불러오지 않음 (파일은 참고용으로 남겨둠). 동시성 문제도 SQLite가 직접 처리하므로 수동 파일 락(`flock`) 코드를 제거함
+
 ## [1.3.0] - 2026-09-18
 
 ### Added

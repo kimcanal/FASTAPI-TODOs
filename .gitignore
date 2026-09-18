@@ -3,4 +3,8 @@ fastapi-app/__pycache__/
 fastapi-app/**/__pycache__/
 fastapi-app/app.log
 fastapi-app/todo.json.lock
+fastapi-app/todo.db
+fastapi-app/todo.db-wal
+fastapi-app/todo.db-shm
+fastapi-app/.session_secret
 .pytest_cache/

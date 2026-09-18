@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login · To-Do List</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+    <style>
+        :root {
+            --bg-from: #eef2ff;
+            --bg-to: #f5f3ff;
+            --card: #ffffff;
+            --ink: #1f2430;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --accent: #6366f1;
+            --accent-ink: #ffffff;
+            --danger: #991b1b;
+            --danger-bg: #fef2f2;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+            max-width: 360px;
+            margin: 4rem auto;
+            padding: 0 1rem;
+            color: var(--ink);
+            background: linear-gradient(160deg, var(--bg-from), var(--bg-to));
+            min-height: 100vh;
+        }
+        @media (max-width: 480px) { body { margin: 2rem auto; } }
+        h1 { font-size: 1.4rem; text-align: center; margin: 0 0 1.25rem; }
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 10px 30px -12px rgba(30, 41, 59, .18);
+        }
+        form { display: flex; flex-direction: column; gap: .7rem; }
+        input[type="text"], input[type="password"] {
+            padding: .6rem .75rem;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            font-size: 1rem;
+            outline: none;
+        }
+        input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(99 102 241 / .15); }
+        button[type="submit"] {
+            border: none;
+            border-radius: 10px;
+            padding: .65rem 1rem;
+            font-size: .95rem;
+            font-weight: 600;
+            cursor: pointer;
+            background: var(--accent);
+            color: var(--accent-ink);
+        }
+        button[type="submit"]:hover { opacity: .9; }
+        #toggle {
+            margin-top: 1rem;
+            text-align: center;
+            font-size: .85rem;
+            color: var(--muted);
+        }
+        #toggle button {
+            border: none;
+            background: none;
+            color: var(--accent);
+            cursor: pointer;
+            font-size: .85rem;
+            text-decoration: underline;
+            padding: 0;
+        }
+        #error {
+            color: var(--danger);
+            background: var(--danger-bg);
+            border: 1px solid #fecaca;
+            border-radius: 10px;
+            padding: .6rem .75rem;
+            margin: 0 0 .8rem;
+            font-size: .85rem;
+        }
+    </style>
+</head>
+<body>
+    <h1>📝 To-Do List</h1>
+    <div class="card">
+        <p id="error" role="alert" hidden></p>
+        <form id="auth-form">
+            <input type="text" id="username" placeholder="아이디 (영문/숫자/_, 3자 이상)" required>
+            <input type="password" id="password" placeholder="비밀번호 (4자 이상)" required>
+            <button type="submit" id="submit-btn">로그인</button>
+        </form>
+        <div id="toggle">
+            계정이 없으신가요? <button type="button" id="toggle-btn">회원가입</button>
+        </div>
+    </div>
+    <script>
+        const $ = (id) => document.getElementById(id);
+        let mode = "login"; // "login" | "register"
+
+        $("toggle-btn").onclick = () => {
+          mode = mode === "login" ? "register" : "login";
+          $("submit-btn").textContent = mode === "login" ? "로그인" : "회원가입";
+          $("toggle-btn").textContent = mode === "login" ? "회원가입" : "로그인";
+          $("toggle").firstChild.textContent = mode === "login" ? "계정이 없으신가요? " : "이미 계정이 있으신가요? ";
+          $("error").hidden = true;
+        };
+
+        $("auth-form").onsubmit = async (event) => {
+          event.preventDefault();
+          const username = $("username").value.trim();
+          const password = $("password").value;
+          try {
+            const res = await fetch(`/auth/${mode}`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username, password }),
+            });
+            if (!res.ok) throw new Error((await res.json()).detail ?? `${res.status}`);
+            location.href = "/";
+          } catch (e) {
+            $("error").textContent = e.message;
+            $("error").hidden = false;
+          }
+        };
+    </script>
+</body>
+</html>
