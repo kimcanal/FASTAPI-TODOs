@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>To-Do List</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
     <style>
         :root {
             --bg-from: #eef2ff;
@@ -27,6 +28,11 @@
             background: linear-gradient(160deg, var(--bg-from), var(--bg-to));
             min-height: 100vh;
         }
+        @media (max-width: 480px) {
+            body { margin: 1.5rem auto; }
+            h1 { font-size: 1.35rem; }
+            .card { padding: 1.1rem; border-radius: 12px; }
+        }
         h1 {
             font-size: 1.6rem;
             margin: 0 0 1.25rem;
@@ -44,7 +50,7 @@
             padding: .6rem .75rem;
             border: 1px solid var(--border);
             border-radius: 10px;
-            font-size: .95rem;
+            font-size: 1rem;             /* 16px 미만이면 iOS Safari가 포커스 시 자동 확대함 */
             outline: none;
             transition: border-color .15s, box-shadow .15s;
         }
@@ -78,6 +84,7 @@
         }
         #filters {
             display: flex;
+            flex-wrap: wrap;
             gap: .4rem;
             align-items: center;
             margin-bottom: 1rem;
@@ -105,7 +112,8 @@
         li {
             display: flex;
             align-items: center;
-            gap: .7rem;
+            flex-wrap: wrap;
+            gap: .5rem .7rem;
             padding: .65rem .25rem;
             border-bottom: 1px solid var(--border);
         }
@@ -117,13 +125,14 @@
             cursor: pointer;
             flex: none;
         }
-        li span { flex: 1; word-break: break-word; }
+        li span { flex: 1 1 auto; min-width: 8rem; word-break: break-word; }
         .done { text-decoration: line-through; color: var(--muted); }
         li button {
             background: #f3f4f6;
             color: var(--ink);
             font-size: .8rem;
-            padding: .4rem .7rem;
+            padding: .5rem .7rem;
+            flex: none;
         }
         li button:hover { background: #e5e7eb; }
         li button:last-child {
@@ -131,6 +140,11 @@
             color: var(--danger);
         }
         li button:last-child:hover { background: #fee2e2; }
+        li.editing input[type="text"] {
+            flex: 1 1 8rem;
+            padding: .5rem .6rem;
+            font-size: 1rem;
+        }
         footer {
             margin-top: 1rem;
             text-align: center;
@@ -167,6 +181,7 @@
         const listEl = $("todo-list"), errorEl = $("error"), countEl = $("count");
         let allTodos = [];
         let filter = "all";
+        let editingId = null;
 
         // 모든 요청을 한 곳에서 처리하고, 실패는 조용히 넘기지 않는다
         async function api(url, method = "GET", body) {
@@ -215,6 +230,25 @@
           });
           countEl.textContent = `${allTodos.filter((t) => !t.completed).length}개 남음`;
           listEl.replaceChildren(...todos.map((todo) => {
+            const li = document.createElement("li");
+
+            if (todo.id === editingId) {
+              li.className = "editing";
+              const titleInput = Object.assign(document.createElement("input"), {
+                type: "text", value: todo.title, className: "edit-title",
+              });
+              const descInput = Object.assign(document.createElement("input"), {
+                type: "text", value: todo.description, className: "edit-description",
+              });
+              const onKey = (e) => {
+                if (e.key === "Enter") submitEdit(todo, li);
+                if (e.key === "Escape") cancelEdit();
+              };
+              titleInput.onkeydown = descInput.onkeydown = onKey;
+              li.append(titleInput, descInput, button("저장", () => submitEdit(todo, li)), button("취소", cancelEdit));
+              return li;
+            }
+
             const check = Object.assign(document.createElement("input"), {
               type: "checkbox",
               checked: todo.completed,
@@ -224,23 +258,33 @@
               textContent: `${todo.title} — ${todo.description}`,
               className: todo.completed ? "done" : "",
             });
-            const li = document.createElement("li");
-            li.append(check, text, button("수정", () => edit(todo)), button("삭제", () => remove(todo.id)));
+            li.append(check, text, button("수정", () => startEdit(todo.id)), button("삭제", () => remove(todo.id)));
             return li;
           }));
+
+          if (editingId !== null) listEl.querySelector(".edit-title")?.focus();
         }
 
-        function edit(todo) {
-          const title = prompt("새 제목:", todo.title);
-          if (title === null) return;
-          if (!title.trim()) {
+        function startEdit(id) {
+          editingId = id;
+          render();
+        }
+
+        function cancelEdit() {
+          editingId = null;
+          render();
+        }
+
+        function submitEdit(todo, li) {
+          const title = li.querySelector(".edit-title").value.trim();
+          if (!title) {
             errorEl.textContent = "수정 실패: 제목은 공백만으로 입력할 수 없습니다";
             errorEl.hidden = false;
             return;
           }
-          const description = prompt("새 설명:", todo.description);
-          if (description === null) return;
-          save(todo.id, { ...todo, title: title.trim(), description: description.trim() });
+          const description = li.querySelector(".edit-description").value.trim();
+          editingId = null;
+          save(todo.id, { ...todo, title, description });
         }
 
         function remove(id) {

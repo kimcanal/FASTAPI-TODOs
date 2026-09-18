@@ -2,4 +2,5 @@ fastapi-app/myenv/
 fastapi-app/__pycache__/
 fastapi-app/**/__pycache__/
 fastapi-app/app.log
+fastapi-app/todo.json.lock
 .pytest_cache/

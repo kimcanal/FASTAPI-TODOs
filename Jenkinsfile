@@ -38,7 +38,7 @@ pipeline {
                     nohup ./myenv/bin/uvicorn main:app --host 0.0.0.0 --port "${DEPLOY_PORT}" > app.log 2>&1 &
                     disown
                     sleep 2
-                    curl -sf "http://localhost:${DEPLOY_PORT}/api/version"
+                    curl -sf "http://localhost:${DEPLOY_PORT}/health"
                 '''
             }
         }

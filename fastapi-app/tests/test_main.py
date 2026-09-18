@@ -14,6 +14,12 @@ def isolated_todo_file(tmp_path, monkeypatch):
 client = TestClient(main.app)
 
 
+def test_health_check():
+    response = client.get("/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_version_endpoint_matches_version_file():
     response = client.get("/api/version")
     assert response.status_code == 200

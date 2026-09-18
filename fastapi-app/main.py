@@ -1,6 +1,9 @@
+import contextlib
+import fcntl
 import json
 import os
 import subprocess
+import threading
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
@@ -10,6 +13,7 @@ from pydantic import BaseModel, Field, field_validator
 
 BASE_DIR = Path(__file__).resolve().parent       # main.py 가 있는 폴더
 TODO_FILE = BASE_DIR / "todo.json"
+TODO_LOCK_FILE = BASE_DIR / "todo.json.lock"
 INDEX_FILE = BASE_DIR / "templates" / "index.html"
 VERSION_FILE = BASE_DIR / "VERSION"
 CHANGELOG_FILE = BASE_DIR / "CHANGELOG.md"
@@ -17,6 +21,20 @@ RELEASE_NOTES_TEMPLATE = BASE_DIR / "templates" / "release_notes.html"
 
 if not TODO_FILE.exists():                       # 없으면 빈 목록으로 만들어 둔다
     TODO_FILE.write_text("[]", encoding="utf-8")
+
+TODO_THREAD_LOCK = threading.Lock()              # 같은 프로세스 안 여러 스레드 사이의 경쟁 방지
+
+
+@contextlib.contextmanager
+def locked_todos():
+    # 이 파일을 실행하는 uvicorn 프로세스가 여러 개(예: 8000, 8020번 포트)일 수 있으므로,
+    # 프로세스 간 경쟁까지 막기 위해 파일 잠금(flock)을 함께 사용한다.
+    with TODO_THREAD_LOCK, open(TODO_LOCK_FILE, "w") as lock_fh:
+        fcntl.flock(lock_fh, fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock_fh, fcntl.LOCK_UN)
 
 
 def _detect_git_commit() -> str:
@@ -86,27 +104,35 @@ def get_todos(completed: bool | None = None) -> list[TodoItem]:
 
 @app.post("/todos", status_code=201)             # 추가 — id 는 서버가 매긴다
 def create_todo(payload: TodoIn) -> TodoItem:
-    todos = load_todos()
-    new_id = max((t.id for t in todos), default=0) + 1
-    todo = TodoItem(id=new_id, **payload.model_dump())
-    save_todos(todos + [todo])
-    return todo
+    with locked_todos():
+        todos = load_todos()
+        new_id = max((t.id for t in todos), default=0) + 1
+        todo = TodoItem(id=new_id, **payload.model_dump())
+        save_todos(todos + [todo])
+        return todo
 
 
 @app.put("/todos/{todo_id}")                     # 수정
 def update_todo(todo_id: int, payload: TodoIn) -> TodoItem:
-    todos = load_todos()
-    todo = TodoItem(id=todo_id, **payload.model_dump())
-    todos[find_index(todos, todo_id)] = todo
-    save_todos(todos)
-    return todo
+    with locked_todos():
+        todos = load_todos()
+        todo = TodoItem(id=todo_id, **payload.model_dump())
+        todos[find_index(todos, todo_id)] = todo
+        save_todos(todos)
+        return todo
 
 
 @app.delete("/todos/{todo_id}", status_code=204)  # 삭제
 def delete_todo(todo_id: int) -> None:
-    todos = load_todos()
-    del todos[find_index(todos, todo_id)]
-    save_todos(todos)
+    with locked_todos():
+        todos = load_todos()
+        del todos[find_index(todos, todo_id)]
+        save_todos(todos)
+
+
+@app.get("/health", include_in_schema=False)     # 배포/모니터링용 헬스체크
+def health_check() -> dict:
+    return {"status": "ok"}
 
 
 @app.get("/api/version")                         # 현재 버전/빌드 정보 조회
