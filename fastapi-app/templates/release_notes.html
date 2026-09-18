@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Release Notes · To-Do List</title>
+    <style>
+        :root {
+            --bg-from: #eef2ff;
+            --bg-to: #f5f3ff;
+            --card: #ffffff;
+            --ink: #1f2430;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --accent: #6366f1;
+        }
+        * { box-sizing: border-box; }
+        body {
+            font-family: "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+            max-width: 640px;
+            margin: 3rem auto;
+            padding: 0 1rem;
+            color: var(--ink);
+            background: linear-gradient(160deg, var(--bg-from), var(--bg-to));
+            min-height: 100vh;
+        }
+        h1 { font-size: 1.6rem; margin: 0 0 1.25rem; letter-spacing: -.02rem; }
+        .card {
+            background: var(--card);
+            border-radius: 16px;
+            padding: 1.5rem 1.75rem;
+            box-shadow: 0 10px 30px -12px rgba(30, 41, 59, .18);
+        }
+        .card h2 { font-size: 1.15rem; margin: 1.5rem 0 .5rem; }
+        .card h2:first-child { margin-top: 0; }
+        .card h3 { font-size: .95rem; color: var(--muted); margin: 1rem 0 .4rem; }
+        .card ul { margin: 0 0 .5rem; padding-left: 1.2rem; }
+        .card li { margin: .25rem 0; }
+        .card p { color: var(--muted); }
+        a.back {
+            display: inline-block;
+            margin-bottom: 1rem;
+            color: var(--accent);
+            text-decoration: none;
+            font-size: .9rem;
+        }
+        a.back:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <h1>🗒️ Release Notes</h1>
+    <a class="back" href="/">← 할 일 목록으로 돌아가기</a>
+    <div class="card">
+        <!--CONTENT-->
+    </div>
+</body>
+</html>

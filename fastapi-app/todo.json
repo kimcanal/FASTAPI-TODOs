@@ -4,5 +4,11 @@
     "description": "김윤하",
     "completed": false,
     "id": 1
+  },
+  {
+    "title": "New Release!",
+    "description": "",
+    "completed": false,
+    "id": 2
   }
 ]

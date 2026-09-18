@@ -131,6 +131,14 @@
             color: var(--danger);
         }
         li button:last-child:hover { background: #fee2e2; }
+        footer {
+            margin-top: 1rem;
+            text-align: center;
+            font-size: .8rem;
+            color: var(--muted);
+        }
+        footer a { color: var(--accent); text-decoration: none; }
+        footer a:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
@@ -150,6 +158,10 @@
         </div>
         <ul id="todo-list"></ul>
     </div>
+    <footer>
+        <span id="version-info">버전 확인 중…</span>
+        · <a href="/release-notes">릴리스 노트</a>
+    </footer>
     <script>
         const $ = (id) => document.getElementById(id);
         const listEl = $("todo-list"), errorEl = $("error"), countEl = $("count");
@@ -251,7 +263,17 @@
           });
         };
 
+        async function loadVersion() {
+          try {
+            const info = await api("/api/version");
+            $("version-info").textContent = `v${info.version} (${info.commit} · build ${info.build})`;
+          } catch {
+            $("version-info").textContent = "버전 정보를 불러올 수 없습니다";
+          }
+        }
+
         load();
+        loadVersion();
     </script>
 </body>
 </html>

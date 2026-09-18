@@ -1,16 +1,41 @@
 import json
+import os
+import subprocess
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, HTMLResponse
+from markdown_it import MarkdownIt
 from pydantic import BaseModel, Field, field_validator
 
 BASE_DIR = Path(__file__).resolve().parent       # main.py 가 있는 폴더
 TODO_FILE = BASE_DIR / "todo.json"
 INDEX_FILE = BASE_DIR / "templates" / "index.html"
+VERSION_FILE = BASE_DIR / "VERSION"
+CHANGELOG_FILE = BASE_DIR / "CHANGELOG.md"
+RELEASE_NOTES_TEMPLATE = BASE_DIR / "templates" / "release_notes.html"
 
 if not TODO_FILE.exists():                       # 없으면 빈 목록으로 만들어 둔다
     TODO_FILE.write_text("[]", encoding="utf-8")
+
+
+def _detect_git_commit() -> str:
+    commit = os.environ.get("GIT_COMMIT")        # Jenkins가 자동으로 채워주는 환경변수
+    if commit:
+        return commit[:7]
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=BASE_DIR, capture_output=True, text=True, timeout=2, check=True,
+        )
+        return result.stdout.strip()
+    except Exception:
+        return "unknown"
+
+
+APP_VERSION = VERSION_FILE.read_text(encoding="utf-8").strip() if VERSION_FILE.exists() else "0.0.0"
+GIT_COMMIT = _detect_git_commit()
+BUILD_NUMBER = os.environ.get("BUILD_NUMBER", "local")   # Jenkins가 자동으로 채워주는 환경변수
 
 app = FastAPI(title="To-Do List API")
 
@@ -82,6 +107,23 @@ def delete_todo(todo_id: int) -> None:
     todos = load_todos()
     del todos[find_index(todos, todo_id)]
     save_todos(todos)
+
+
+@app.get("/api/version")                         # 현재 버전/빌드 정보 조회
+def get_version() -> dict:
+    return {"version": APP_VERSION, "commit": GIT_COMMIT, "build": BUILD_NUMBER}
+
+
+@app.get("/release-notes", include_in_schema=False)  # 릴리스 노트 화면
+def read_release_notes() -> HTMLResponse:
+    changelog_md = (
+        CHANGELOG_FILE.read_text(encoding="utf-8")
+        if CHANGELOG_FILE.exists()
+        else "# Changelog\n\n(작성된 릴리스 노트가 없습니다.)"
+    )
+    content_html = MarkdownIt().render(changelog_md)
+    page = RELEASE_NOTES_TEMPLATE.read_text(encoding="utf-8").replace("<!--CONTENT-->", content_html)
+    return HTMLResponse(page)
 
 
 @app.get("/", include_in_schema=False)           # 화면 서빙

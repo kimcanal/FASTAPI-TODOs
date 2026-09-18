@@ -1,0 +1,5 @@
+fastapi-app/myenv/
+fastapi-app/__pycache__/
+fastapi-app/**/__pycache__/
+fastapi-app/app.log
+.pytest_cache/
