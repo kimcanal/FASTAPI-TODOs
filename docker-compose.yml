@@ -6,8 +6,16 @@ services:
     container_name: ${CONTAINER_NAME:-FastApi-app}   # 공용 서버에서는 이름이 겹치지 않게 지정
     ports:
       - "${HOST_PORT:-5001}:8000"   # 외부포트:내부포트
+    environment:
+      BUILD_NUMBER: ${BUILD_NUMBER:-local}   # Jenkins 빌드 번호 (화면 하단에 표시)
+      GIT_COMMIT: ${GIT_COMMIT:-}
+    volumes:
+      - todo-data:/app/data       # DB·세션 키 보존 (재배포해도 데이터 유지)
     restart: unless-stopped       # 서버 재부팅·오류 시 자동 재시작
     security_opt:
       - no-new-privileges:true    # 컨테이너 안에서 권한 상승 차단
     cap_drop:
       - ALL                       # 불필요한 커널 권한 모두 제거
+
+volumes:
+  todo-data:

@@ -13,8 +13,10 @@ from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.sessions import SessionMiddleware
 
 BASE_DIR = Path(__file__).resolve().parent       # main.py 가 있는 폴더
-DB_FILE = BASE_DIR / "todo.db"
-SESSION_SECRET_FILE = BASE_DIR / ".session_secret"
+DATA_DIR = Path(os.environ.get("DATA_DIR", BASE_DIR))   # DB·세션 키 저장 위치 (Docker에서는 볼륨 경로)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_FILE = DATA_DIR / "todo.db"
+SESSION_SECRET_FILE = DATA_DIR / ".session_secret"
 INDEX_FILE = BASE_DIR / "templates" / "index.html"
 LOGIN_FILE = BASE_DIR / "templates" / "login.html"
 VERSION_FILE = BASE_DIR / "VERSION"

@@ -3,6 +3,26 @@
 이 프로젝트의 주요 변경 사항을 기록합니다.
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따릅니다.
 
+## [3.0.0] - 2026-09-25
+
+### Added
+
+- Docker 배포 지원: `Dockerfile`(root가 아닌 `appuser`로 실행), `.dockerignore`, `docker-compose.yml`
+- Jenkins 배포 파이프라인 2종 — GitHub clone 후 `docker compose` 배포 / DockerHub push 후 `docker pull` 배포 (본인 서버·팀 서버)
+- 컨테이너 헬스체크(`HEALTHCHECK`, `/health`) — `docker ps`에 `healthy` 표시
+- Jenkins 빌드 실패 시 이메일 알림, 복구 시 복구 알림
+
+### Changed
+
+- **[BREAKING]** DB(`todo.db`)와 세션 키(`.session_secret`)를 `DATA_DIR` 환경변수 경로에 저장 (기본값은 기존과 같은 앱 폴더, Docker에서는 `/app/data` 볼륨). 기존 컨테이너의 데이터는 새 볼륨으로 옮겨지지 않음
+- 의존성 버전 고정 (`requirements.txt`, `requirements-dev.txt`)
+- compose 배포에서도 화면 하단에 Jenkins 빌드 번호·커밋이 표시되도록 `BUILD_NUMBER`/`GIT_COMMIT` 전달
+- `docker-compose.yml`의 컨테이너 이름·포트를 `CONTAINER_NAME`/`HOST_PORT`로 바꿀 수 있게 함 (공용 팀 서버에서 충돌 방지)
+
+### Fixed
+
+- 재배포(컨테이너 재생성)할 때마다 계정과 할 일이 모두 지워지던 문제 — Docker 볼륨으로 데이터 유지
+
 ## [2.0.0] - 2026-09-18
 
 ### Added

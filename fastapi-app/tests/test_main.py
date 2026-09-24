@@ -117,3 +117,17 @@ def test_users_cannot_see_or_modify_each_others_todos(client):
 
     # alice의 데이터는 그대로 남아 있어야 한다
     assert client.get("/todos").json() == [todo]
+
+
+def test_data_dir_env_moves_db_and_secret(tmp_path, monkeypatch):
+    import importlib
+
+    monkeypatch.setenv("DATA_DIR", str(tmp_path / "data"))
+    reloaded = importlib.reload(main)
+    try:
+        assert reloaded.DB_FILE == tmp_path / "data" / "todo.db"
+        assert reloaded.DB_FILE.exists()
+        assert (tmp_path / "data" / ".session_secret").exists()
+    finally:
+        monkeypatch.delenv("DATA_DIR")
+        importlib.reload(main)

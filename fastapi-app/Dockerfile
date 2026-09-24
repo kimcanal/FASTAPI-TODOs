@@ -21,10 +21,19 @@ RUN pip install -r requirements.txt
 # 소스 복사 (앱이 todo.json을 수정할 수 있도록 소유자를 appuser로 지정)
 COPY --chown=appuser:appuser . .
 
+# DB·세션 키는 /app/data에 저장 → 볼륨을 붙이면 재배포해도 데이터 유지
+ENV DATA_DIR=/app/data
+RUN mkdir -p /app/data && chown appuser:appuser /app/data
+VOLUME /app/data
+
 # 이후 명령은 appuser 권한으로 실행
 USER appuser
 
 EXPOSE 8000
+
+# 30초마다 /health 확인 → docker ps에 healthy/unhealthy 표시
+HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
 
 # FastAPI 서버 실행
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
