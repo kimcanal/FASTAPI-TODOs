@@ -8,3 +8,4 @@ fastapi-app/todo.db-wal
 fastapi-app/todo.db-shm
 fastapi-app/.session_secret
 .pytest_cache/
+.env
