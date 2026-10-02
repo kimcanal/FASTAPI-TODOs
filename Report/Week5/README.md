@@ -26,17 +26,67 @@ API_BASE_URL=http://163.239.77.76:8022 pytest -m integration \
 
 ![통합 테스트 html](./(2)-1_integration_report_html.png)
 
-## (3) Claude Code + Playwright UI 테스트
+## (3) Claude Code로 Playwright 연동 — UI 테스트 수행 및 보고서
 
-`ui-tests/`에 Playwright Test 기반 UI 테스트 8개를 작성했습니다 (로그인 리다이렉트, 회원가입, 할 일 추가, 완료 처리, 인라인 수정, 삭제, 로그아웃, 릴리스 노트). 배포된 앱(본인 서버)을 실제 헤드리스 브라우저로 조작하며 검증합니다.
+### 1. 목적
+
+지금까지의 테스트(`test_main.py`, `test_integration_deployed.py`)는 전부 HTTP 요청/응답 레벨 검증입니다. 실제 사용자가 브라우저에서 클릭·입력하는 흐름까지는 보장하지 못하므로, **배포된 앱을 실제 브라우저로 조작하는 E2E(end-to-end) UI 테스트**를 Claude Code가 직접 작성·실행했습니다.
+
+### 2. 도구 선택 — Playwright vs Selenium
+
+Selenium 대신 **Playwright Test**(`@playwright/test`)를 선택했습니다.
+
+| 비교 | Selenium | Playwright Test |
+|---|---|---|
+| 설치 | 브라우저 드라이버(ChromeDriver 등) 별도 관리 필요 | `npx playwright install`로 브라우저까지 한 번에 설치 |
+| 대기 처리 | 명시적 `WebDriverWait` 작성 필요 | 자동 재시도(auto-waiting) — 엘리먼트가 준비될 때까지 알아서 기다림 |
+| 리포트 | 별도 플러그인(pytest-html 등) 필요 | 테스트 러너에 HTML 리포트가 내장 |
+| 테스트 격리 | 수동으로 세션/쿠키 관리 | 테스트마다 독립된 브라우저 컨텍스트 자동 생성 |
+
+같은 서버(163.239.77.80)에 Node.js가 이미 있어 추가 설치 부담이 적고, 세션 쿠키 기반 로그인을 매 테스트마다 격리해서 검증하기 좋아 Playwright를 선택했습니다.
+
+### 3. 테스트 대상 및 환경
+
+- 대상: 배포된 실제 앱 — `http://163.239.77.80:5001` (본인 서버, `docker compose` 배포본)
+- 도구: Playwright Test v1.63, Chromium(headless)
+- 위치: 저장소 `ui-tests/` (`playwright.config.js`, `tests/todo-app.spec.js`)
+
+### 4. 테스트 시나리오 (8개)
+
+| # | 시나리오 | 검증 내용 |
+| --- | --- | --- |
+| 1 | 비로그인 접근 | `/` → `/login` 리다이렉트 |
+| 2 | 회원가입 | 가입 즉시 로그인되어 할 일 목록으로 이동, 사용자명 표시 |
+| 3 | 할 일 추가 | 목록에 제목·설명이 보임 |
+| 4 | 완료 처리 | 체크박스 토글 → 완료/진행중 필터에 맞게 보이고 사라짐 |
+| 5 | 인라인 수정 | 수정 버튼 → 입력창으로 전환 → 저장 후 반영 |
+| 6 | 삭제 | 확인 다이얼로그 수락 → 목록에서 제거 |
+| 7 | 로그아웃 | 로그인 화면으로 이동, 이후 `/` 재접근도 차단 |
+| 8 | 릴리스 노트 | `/release-notes`에 변경 이력이 렌더링됨 |
+
+### 5. 실행
 
 ```bash
-cd ui-tests && BASE_URL=http://163.239.77.80:5001 npx playwright test
+cd ui-tests
+npm install && npx playwright install chromium
+BASE_URL=http://163.239.77.80:5001 npx playwright test
+npx playwright show-report
 ```
+
+### 6. 결과
+
+**8개 시나리오 전부 통과** (`playwright-report/index.html`, 총 소요 4.9초).
 
 ![Playwright 테스트 결과](./(3)-1_playwright_report.png)
 
-### 결과 요약
+### 7. 테스트 작성 중 발견한 이슈
 
-- 8개 시나리오 전부 통과 (`playwright-report/index.html`)
-- 발견한 이슈: 인라인 수정 모드로 전환되면 `<li>`의 텍스트 콘텐츠가 더 이상 입력값을 포함하지 않아(`input value`는 텍스트 노드가 아님) 기존 `hasText` 로케이터가 깨짐 → 편집 중인 행을 `li.editing`으로 직접 찾도록 테스트를 수정해 해결
+최초 작성한 시나리오 5(인라인 수정) 테스트가 30초 타임아웃으로 실패했습니다.
+
+- **원인**: `page.locator('#todo-list li', { hasText: '...' })`로 찾은 `<li>`를 수정 버튼 클릭 후에도 그대로 재사용했는데, 수정 모드로 전환되면 `<li>` 내부가 `<input value="...">`로 바뀌면서 **`textContent`에는 input의 value가 포함되지 않음** — `hasText` 필터가 더 이상 그 요소를 찾지 못해 타임아웃이 난 것이었습니다.
+- **해결**: 수정 모드로 전환한 뒤에는 `hasText`로 과거의 `item`을 재사용하지 않고, CSS 클래스(`li.editing`)로 "현재 편집 중인 행"을 새로 찾도록 테스트를 수정했습니다.
+- **의미**: 이건 테스트 코드만의 문제가 아니라, **실제 사용자 조작 흐름(수정 버튼 클릭 → 입력 → 저장)을 브라우저 레벨에서 그대로 재현했기 때문에 걸러진 문제**입니다. HTTP 레벨 테스트(`test_main.py`)만으로는 발견할 수 없는, UI 테스트의 존재 이유를 보여주는 사례입니다.
+
+### 8. 결론
+
+Playwright로 배포된 앱의 8가지 핵심 사용자 흐름(인증, CRUD, 권한 분리, 릴리스 노트)을 실제 브라우저 레벨에서 검증했고, 전부 정상 동작함을 확인했습니다. 테스트 작성 과정에서 찾은 로케이터 이슈는 테스트 스크립트 버그였을 뿐 앱 자체의 결함은 아니었습니다.
