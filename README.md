@@ -14,16 +14,18 @@
 - 현재 버전 및 릴리스 노트 확인 (`GET /api/version`, `GET /release-notes`)
 - 배포/모니터링용 헬스체크 (`GET /health`), Docker `HEALTHCHECK`로 `docker ps`에 `healthy` 표시
 - 재배포해도 계정·할 일이 유지되도록 데이터를 Docker 볼륨(`/app/data`)에 저장
+- 단위 테스트(라인 커버리지 100%) + 배포 환경 API 통합 테스트 + Playwright UI 테스트까지 자동화
 
 ## 기술 스택
 
 - **FastAPI** + **Uvicorn**
 - **SQLite** — 계정(`users`)과 할 일(`todos`) 저장, WAL 모드로 다중 프로세스 동시 접근 처리
 - **세션 인증** — `itsdangerous` 서명 쿠키, 비밀번호는 PBKDF2(+salt)로 해시 저장
-- **pytest** — 인증 플로우, 계정 간 데이터 격리 포함 테스트
+- **pytest** + **pytest-cov** + **pytest-html** — 인증 플로우·계정 간 데이터 격리 포함 23개 테스트, 라인 커버리지 100%
+- **Playwright** (`@playwright/test`) — 배포된 앱을 실제 브라우저로 조작하는 UI 테스트
 - **Docker** / **Docker Compose** — `python:3.13-slim` 기반, root가 아닌 `appuser`로 실행
 - **Docker Hub** — 배포 이미지 저장소 (`lucatonikroos/fastapi-app`)
-- **Jenkins** — CI/CD 파이프라인, 빌드 실패 시 이메일 알림
+- **Jenkins** — CI/CD 파이프라인, 테스트 실패 시 배포 차단, 커버리지/테스트 리포트 아티팩트 보관, 빌드 실패 시 이메일 알림
 
 ## 프로젝트 구조
 
@@ -32,17 +34,19 @@ fastapi-app/
 ├── main.py                  # FastAPI 앱 — 인증 API, 할 일 API
 ├── Dockerfile               # 컨테이너 이미지 정의
 ├── .dockerignore            # 이미지에 넣지 않을 파일 (가상환경, DB, 비밀값 등)
-├── requirements.txt         # 운영 의존성 (버전 고정)
-├── requirements-dev.txt     # 테스트 의존성 (pytest, httpx)
+├── requirements.txt         # 운영 의존성 (버전 하한 고정, 보안 패치 버전)
+├── requirements-dev.txt     # 테스트 의존성 (pytest, pytest-cov, pytest-html, httpx2)
+├── pyproject.toml           # pytest/coverage 설정
 ├── VERSION                  # 현재 버전
 ├── CHANGELOG.md             # 버전별 변경 이력 (Keep a Changelog 형식)
-├── conftest.py
 ├── templates/
 │   ├── index.html           # 할 일 목록 화면
 │   ├── login.html           # 로그인 / 회원가입 화면
 │   └── release_notes.html   # 릴리스 노트 화면
 └── tests/
-    └── test_main.py
+    ├── test_main.py                   # 단위 테스트 (TestClient, 100% 커버리지)
+    └── test_integration_deployed.py   # 배포 환경 API 통합 테스트 (실제 HTTP, `-m integration`)
+ui-tests/                     # Playwright UI 테스트 (배포된 앱을 브라우저로 조작)
 docker-compose.yml           # compose 배포 설정 (포트·컨테이너 이름·볼륨)
 jenkins/                     # Jenkins 배포 파이프라인 (아래 '배포' 참고)
 Jenkinsfile                  # CI 파이프라인 (Install → Test → Deploy, uvicorn 직접 실행)
@@ -85,6 +89,37 @@ cd fastapi-app
 pytest -v
 ```
 
+커버리지 리포트까지 생성하려면:
+
+```bash
+cd fastapi-app
+pytest --cov=main --cov-report=term --cov-report=html:htmlcov \
+       --html=report.html --self-contained-html --junitxml=junit.xml
+```
+
+`htmlcov/index.html`(커버리지), `report.html`(테스트 결과)이 생성됩니다. 생성 파일이라 git에는 커밋하지 않고, Jenkins가 빌드 아티팩트로 보관합니다.
+
+### 배포 환경 통합 테스트
+
+실제로 떠 있는 배포(팀 서버 등)에 HTTP로 직접 붙어 확인합니다:
+
+```bash
+cd fastapi-app
+API_BASE_URL=http://163.239.77.76:8022 pytest -m integration \
+    tests/test_integration_deployed.py -v --html=integration-report.html --self-contained-html
+```
+
+### UI 테스트 (Playwright)
+
+```bash
+cd ui-tests
+npm install && npx playwright install chromium
+BASE_URL=http://163.239.77.80:5001 npx playwright test
+npx playwright show-report
+```
+
+자세한 시나리오는 [`ui-tests/README.md`](ui-tests/README.md) 참고.
+
 ## 버전 관리 & 릴리스
 
 - 현재 버전은 `fastapi-app/VERSION`, 변경 이력은 `fastapi-app/CHANGELOG.md`에서 관리합니다.
@@ -108,5 +143,6 @@ Docker 기반 배포 파이프라인 4개를 Jenkins Pipeline job으로 등록�
 - 팀 서버는 여러 명이 함께 쓰므로 컨테이너 이름·배포 폴더에 `-yunha`를 붙이고, 배정된 포트(8022/8023)만 사용합니다.
 - Docker Hub 이미지 태그는 Jenkins 빌드 번호(`:N`, 팀 서버 작업은 `:team-N`)와 `:latest` — 번호 태그로 롤백할 수 있습니다.
 - `deploy-compose.groovy`는 빌드 실패 시 담당자 이메일로 실패 알림(로그 첨부)을, 이후 다시 성공하면 복구 알림을 보냅니다. (Jenkins 관리 → System에서 SMTP 설정 필요)
+- 4개 파이프라인 모두 Checkout 직후 Install → Test(pytest + 커버리지/HTML 리포트)를 거치고, **테스트가 통과해야만 Docker 빌드/배포로 진행**합니다. 테스트 결과(JUnit)와 리포트는 빌드 아티팩트로 보관됩니다.
 
 저장소 루트의 `Jenkinsfile`은 이전 주차의 uvicorn 직접 배포 파이프라인(Install → Test → Deploy)입니다.

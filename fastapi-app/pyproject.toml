@@ -1,0 +1,12 @@
+[tool.pytest]
+minversion = "9.0"
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = ["-ra", "-m", "not integration"]
+markers = [
+    "integration: hits a real running deployment over HTTP (needs API_BASE_URL)",
+]
+# filterwarnings = ["error"]  # (선택) 경고를 에러로 처리 = pytest -W error
+
+[tool.coverage.run]
+source = ["main"]

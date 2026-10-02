@@ -104,6 +104,80 @@ def test_blank_title_is_rejected(client):
     assert response.status_code == 422
 
 
+def test_root_redirects_to_login_when_logged_out(client):
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/login"
+
+
+def test_root_serves_app_when_logged_in(client):
+    register(client, "alice", "secret1")
+    response = client.get("/", follow_redirects=False)
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_login_page_redirects_to_root_when_already_logged_in(client):
+    register(client, "alice", "secret1")
+    response = client.get("/login", follow_redirects=False)
+    assert response.status_code == 307
+    assert response.headers["location"] == "/"
+
+
+def test_login_page_renders_when_logged_out(client):
+    response = client.get("/login", follow_redirects=False)
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_stale_session_for_deleted_user_is_rejected(client):
+    user = register(client, "alice", "secret1")
+    with main.get_db() as conn:
+        conn.execute("DELETE FROM users WHERE username = ?", (user["username"],))
+
+    response = client.get("/auth/me")
+    assert response.status_code == 401
+    # 세션도 함께 지워졌어야, 다음 요청에서도 계속 401이어야 한다
+    assert client.get("/auth/me").status_code == 401
+
+
+def test_detect_git_commit_prefers_env_var(monkeypatch):
+    monkeypatch.setenv("GIT_COMMIT", "abcdef1234567890")
+    assert main._detect_git_commit() == "abcdef1"
+
+
+def test_detect_git_commit_falls_back_when_git_fails(monkeypatch):
+    monkeypatch.delenv("GIT_COMMIT", raising=False)
+
+    def boom(*args, **kwargs):
+        raise FileNotFoundError("git not installed")
+
+    monkeypatch.setattr(main.subprocess, "run", boom)
+    assert main._detect_git_commit() == "unknown"
+
+
+def test_get_or_create_session_secret_prefers_env_var(monkeypatch):
+    monkeypatch.setenv("SESSION_SECRET", "env-secret")
+    assert main._get_or_create_session_secret() == "env-secret"
+
+
+def test_get_or_create_session_secret_reuses_existing_file(tmp_path, monkeypatch):
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+    secret_file = tmp_path / ".session_secret"
+    secret_file.write_text("file-secret", encoding="utf-8")
+    monkeypatch.setattr(main, "SESSION_SECRET_FILE", secret_file)
+    assert main._get_or_create_session_secret() == "file-secret"
+
+
+def test_get_or_create_session_secret_creates_file_when_missing(tmp_path, monkeypatch):
+    monkeypatch.delenv("SESSION_SECRET", raising=False)
+    secret_file = tmp_path / ".session_secret"
+    monkeypatch.setattr(main, "SESSION_SECRET_FILE", secret_file)
+
+    secret = main._get_or_create_session_secret()
+    assert secret_file.read_text(encoding="utf-8").strip() == secret
+
+
 def test_users_cannot_see_or_modify_each_others_todos(client):
     register(client, "alice", "secret1")
     todo = client.post("/todos", json={"title": "alice's secret"}).json()

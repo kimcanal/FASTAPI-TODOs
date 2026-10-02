@@ -7,5 +7,11 @@ fastapi-app/todo.db
 fastapi-app/todo.db-wal
 fastapi-app/todo.db-shm
 fastapi-app/.session_secret
+fastapi-app/htmlcov/
+fastapi-app/report.html
+fastapi-app/junit.xml
+fastapi-app/.coverage
+.coverage
 .pytest_cache/
+fastapi-app/.pytest_cache/
 .env

@@ -9,9 +9,14 @@ Dockerfile
 .dockerignore
 myenv/
 tests/
-conftest.py
+pyproject.toml
 requirements-dev.txt
 .pytest_cache/
+htmlcov/
+report.html
+junit.xml
+integration-report.html
+.coverage
 todo.db
 todo.db-wal
 todo.db-shm

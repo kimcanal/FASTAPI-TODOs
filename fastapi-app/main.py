@@ -1,3 +1,4 @@
+import contextlib
 import hashlib
 import hmac
 import os
@@ -26,12 +27,22 @@ RELEASE_NOTES_TEMPLATE = BASE_DIR / "templates" / "release_notes.html"
 PBKDF2_ITERATIONS = 200_000
 
 
-def get_db() -> sqlite3.Connection:
+@contextlib.contextmanager
+def get_db():
+    # sqlite3.Connection을 `with`로만 쓰면 커밋/롤백만 하고 커넥션은 닫히지 않는다 (ResourceWarning).
+    # 여기서 직접 열고 닫아서, 호출부의 `with get_db() as conn:` 모양은 그대로 유지한다.
     conn = sqlite3.connect(DB_FILE, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     conn.execute("PRAGMA journal_mode = WAL")      # 여러 프로세스가 동시에 읽고 써도 sqlite가 알아서 직렬화한다
-    return conn
+    try:
+        yield conn
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def init_db() -> None:

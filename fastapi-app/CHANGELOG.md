@@ -3,6 +3,26 @@
 이 프로젝트의 주요 변경 사항을 기록합니다.
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따릅니다.
 
+## [4.0.0] - 2026-10-02
+
+### Added
+
+- `pyproject.toml`에 pytest/coverage 설정 추가 (`pythonpath`로 `conftest.py`의 `sys.path` 조작 대체)
+- 테스트를 13개 → **23개**로 확장, `main.py` 라인 커버리지 **100%** 달성 (`pytest-cov`)
+- `pytest-html`/`pytest-cov` HTML 리포트를 Jenkins Docker 배포 파이프라인 4종(`jenkins/*.groovy`) 모두에 연결 — **테스트를 통과해야만 Docker 빌드/배포 단계로 진행**, JUnit 결과와 커버리지 리포트를 빌드 아티팩트로 보관
+- 배포된 실제 환경(팀 서버)에 직접 HTTP로 붙어 검증하는 통합 테스트 추가 (`tests/test_integration_deployed.py`, `pytest -m integration`)
+- Playwright 기반 UI 테스트 추가 (`ui-tests/`) — 배포된 앱을 헤드리스 브라우저로 조작해 로그인/가입/CRUD/인라인수정/삭제/로그아웃/릴리스노트 8개 시나리오 검증, HTML 리포트 생성
+
+### Fixed
+
+- `sqlite3.Connection`을 `with get_db() as conn:`으로만 써서 커넥션이 닫히지 않던 리소스 누수(ResourceWarning) 수정
+
+### Changed
+
+- 의존성 버전을 보안 패치가 적용된 하한선으로 고정: `fastapi>=0.142.0`, `starlette>=1.7.0`(CVE-2026-48710), `uvicorn[standard]>=0.54.0`, `pytest>=9.0.3`(CVE-2025-71176)
+- 테스트 클라이언트를 `httpx`에서 `httpx2`로 교체 (Starlette TestClient 권장 사항)
+- 사용하지 않는 `jinja2` 의존성 제거
+
 ## [3.0.0] - 2026-09-25
 
 ### Added

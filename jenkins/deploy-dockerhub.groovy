@@ -26,6 +26,34 @@ pipeline {
             }
         }
 
+        stage('Install') {
+            steps {
+                sh '''
+                    python3 -m venv fastapi-app/myenv
+                    fastapi-app/myenv/bin/pip install --upgrade pip
+                    fastapi-app/myenv/bin/pip install -r fastapi-app/requirements.txt -r fastapi-app/requirements-dev.txt
+                '''
+            }
+        }
+
+        stage('Test') {
+            steps {
+                sh '''
+                    fastapi-app/myenv/bin/pytest fastapi-app -v \
+                        --cov=main --cov-report=term --cov-report=html:fastapi-app/htmlcov \
+                        --html=fastapi-app/report.html --self-contained-html \
+                        --junitxml=fastapi-app/junit.xml
+                '''
+            }
+            post {
+                always {
+                    junit 'fastapi-app/junit.xml'
+                    archiveArtifacts artifacts: 'fastapi-app/htmlcov/**, fastapi-app/report.html', allowEmptyArchive: true
+                }
+            }
+        }
+
+        // 테스트를 통과해야만 Docker 이미지를 빌드한다
         stage('Build') {
             steps {
                 dir('fastapi-app') {
