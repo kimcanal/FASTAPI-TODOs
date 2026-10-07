@@ -10,22 +10,27 @@
 
 - 회원가입 / 로그인 / 로그아웃 — 세션 쿠키 기반, 계정별로 할 일이 완전히 분리됩니다
 - 할 일 추가 / 목록 조회(전체·진행중·완료 필터) / 인라인 수정 / 삭제
+- 우선순위(👑 중요 / 💌 일반)·마감일 지정, 지난 마감일은 목록에서 빨간 뱃지로 강조
+- 제목·설명 검색, 마감일순/우선순위순 정렬
+- 할 일을 모두 끝내면 축하 배너 표시 + 매일 전부 완료 시 연속 달성 스트릭 집계(`GET /stats`)
 - 모바일 화면 대응 (iOS 자동 확대 방지, 좁은 화면 레이아웃)
 - 현재 버전 및 릴리스 노트 확인 (`GET /api/version`, `GET /release-notes`)
 - 배포/모니터링용 헬스체크 (`GET /health`), Docker `HEALTHCHECK`로 `docker ps`에 `healthy` 표시
 - 재배포해도 계정·할 일이 유지되도록 데이터를 Docker 볼륨(`/app/data`)에 저장
-- 단위 테스트(라인 커버리지 100%) + 배포 환경 API 통합 테스트 + Playwright UI 테스트까지 자동화
+- 단위 테스트(라인 커버리지 99%+) + 배포 환경 API 통합 테스트 + Playwright UI 테스트까지 자동화
+- SonarQube 정적분석을 Jenkins 파이프라인에 통합 (버그·취약점·코드 스멜·Security Hotspot 스캔, Quality Gate로 배포 전 자동 검증)
 
 ## 기술 스택
 
 - **FastAPI** + **Uvicorn**
 - **SQLite** — 계정(`users`)과 할 일(`todos`) 저장, WAL 모드로 다중 프로세스 동시 접근 처리
 - **세션 인증** — `itsdangerous` 서명 쿠키, 비밀번호는 PBKDF2(+salt)로 해시 저장
-- **pytest** + **pytest-cov** + **pytest-html** — 인증 플로우·계정 간 데이터 격리 포함 23개 테스트, 라인 커버리지 100%
+- **pytest** + **pytest-cov** + **pytest-html** — 인증 플로우·계정 간 데이터 격리 포함 29개 테스트, 라인 커버리지 99%+
 - **Playwright** (`@playwright/test`) — 배포된 앱을 실제 브라우저로 조작하는 UI 테스트
 - **Docker** / **Docker Compose** — `python:3.13-slim` 기반, root가 아닌 `appuser`로 실행
 - **Docker Hub** — 배포 이미지 저장소 (`lucatonikroos/fastapi-app`)
 - **Jenkins** — CI/CD 파이프라인, 테스트 실패 시 배포 차단, 커버리지/테스트 리포트 아티팩트 보관, 빌드 실패 시 이메일 알림
+- **SonarQube** (Community Edition) — 정적분석/Quality Gate, pytest의 `coverage.xml`을 그대로 스캔
 
 ## 프로젝트 구조
 
@@ -47,7 +52,8 @@ fastapi-app/
     ├── test_main.py                   # 단위 테스트 (TestClient, 100% 커버리지)
     └── test_integration_deployed.py   # 배포 환경 API 통합 테스트 (실제 HTTP, `-m integration`)
 ui-tests/                     # Playwright UI 테스트 (배포된 앱을 브라우저로 조작)
-docker-compose.yml           # compose 배포 설정 (포트·컨테이너 이름·볼륨)
+docker-compose.yml           # compose 배포 설정 (포트·컨테이너 이름·볼륨, SonarQube/DB 포함)
+sonar-project.properties     # SonarQube 스캔 설정 (소스·테스트 경로, 커버리지 리포트 경로)
 jenkins/                     # Jenkins 배포 파이프라인 (아래 '배포' 참고)
 Jenkinsfile                  # CI 파이프라인 (Install → Test → Deploy, uvicorn 직접 실행)
 Report/                      # 주차별 과제 보고서 캡처

@@ -5,7 +5,9 @@ import os
 import secrets
 import sqlite3
 import subprocess
+from datetime import date, timedelta
 from pathlib import Path
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
@@ -64,7 +66,24 @@ def init_db() -> None:
                 user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
                 title TEXT NOT NULL,
                 description TEXT NOT NULL DEFAULT '',
-                completed INTEGER NOT NULL DEFAULT 0
+                completed INTEGER NOT NULL DEFAULT 0,
+                priority TEXT NOT NULL DEFAULT 'normal',
+                due_date TEXT
+            )
+            """
+        )
+        # 기존 DB(볼륨)에 이미 todos 테이블이 있던 경우를 위한 마이그레이션
+        existing_columns = {row["name"] for row in conn.execute("PRAGMA table_info(todos)")}
+        if "priority" not in existing_columns:
+            conn.execute("ALTER TABLE todos ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'")
+        if "due_date" not in existing_columns:
+            conn.execute("ALTER TABLE todos ADD COLUMN due_date TEXT")
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS user_stats (
+                user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+                last_completed_date TEXT,
+                streak INTEGER NOT NULL DEFAULT 0
             )
             """
         )
@@ -121,6 +140,8 @@ class TodoIn(BaseModel):                         # 클라이언트가 보내는 
     title: str = Field(min_length=1, max_length=100)
     description: str = ""
     completed: bool = False
+    priority: Literal["high", "normal"] = "normal"
+    due_date: date | None = None
 
     @field_validator("title")
     @classmethod
@@ -154,7 +175,48 @@ def get_current_user(request: Request) -> sqlite3.Row:
 
 
 def _row_to_todo(row: sqlite3.Row) -> TodoItem:
-    return TodoItem(id=row["id"], title=row["title"], description=row["description"], completed=bool(row["completed"]))
+    return TodoItem(
+        id=row["id"],
+        title=row["title"],
+        description=row["description"],
+        completed=bool(row["completed"]),
+        priority=row["priority"],
+        due_date=row["due_date"],
+    )
+
+
+def _recompute_streak(conn: sqlite3.Connection, user_id: int) -> int:
+    # 오늘 할 일을 전부 끝냈으면 스트릭 +1 (단, 하루 한 번만), 하루 이상 비면 스트릭은 끊긴다
+    todos = conn.execute("SELECT completed FROM todos WHERE user_id = ?", (user_id,)).fetchall()
+    all_done_today = len(todos) > 0 and all(row["completed"] for row in todos)
+
+    stats = conn.execute(
+        "SELECT last_completed_date, streak FROM user_stats WHERE user_id = ?", (user_id,)
+    ).fetchone()
+    today = date.today()
+    last_date = date.fromisoformat(stats["last_completed_date"]) if stats and stats["last_completed_date"] else None
+    streak = stats["streak"] if stats else 0
+
+    if all_done_today:
+        if last_date == today:
+            pass
+        elif last_date == today - timedelta(days=1):
+            streak += 1
+            last_date = today
+        else:
+            streak = 1
+            last_date = today
+    elif last_date is not None and last_date < today - timedelta(days=1):
+        streak = 0
+
+    conn.execute(
+        """
+        INSERT INTO user_stats (user_id, last_completed_date, streak) VALUES (?, ?, ?)
+        ON CONFLICT(user_id) DO UPDATE SET last_completed_date = excluded.last_completed_date, streak = excluded.streak
+        """,
+        (user_id, last_date.isoformat() if last_date else None, streak),
+    )
+    return streak
 
 
 @app.post("/auth/register", status_code=201)     # 회원가입 — 성공 시 바로 로그인 처리
@@ -197,25 +259,48 @@ def me(user: sqlite3.Row = Depends(get_current_user)) -> dict:
     return {"username": user["username"]}
 
 
-@app.get("/todos")                               # 목록 조회 (completed로 필터링 가능, 본인 것만)
-def get_todos(completed: bool | None = None, user: sqlite3.Row = Depends(get_current_user)) -> list[TodoItem]:
+@app.get("/todos")                               # 목록 조회 (completed/검색/정렬 가능, 본인 것만)
+def get_todos(
+    completed: bool | None = None,
+    q: str | None = None,
+    sort: Literal["due_date", "priority"] | None = None,
+    user: sqlite3.Row = Depends(get_current_user),
+) -> list[TodoItem]:
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT id, title, description, completed FROM todos WHERE user_id = ? ORDER BY id",
+            "SELECT id, title, description, completed, priority, due_date FROM todos WHERE user_id = ? ORDER BY id",
             (user["id"],),
         ).fetchall()
     todos = [_row_to_todo(row) for row in rows]
-    if completed is None:
-        return todos
-    return [t for t in todos if t.completed == completed]
+    if completed is not None:
+        todos = [t for t in todos if t.completed == completed]
+    needle = q.strip().lower() if q else ""
+    if needle:
+        todos = [t for t in todos if needle in t.title.lower() or needle in t.description.lower()]
+    if sort == "due_date":
+        todos.sort(key=lambda t: (t.due_date is None, t.due_date))
+    elif sort == "priority":
+        order = {"high": 0, "normal": 1}
+        todos.sort(key=lambda t: order[t.priority])
+    return todos
+
+
+@app.get("/stats")                               # 연속 완료 스트릭 조회 (본인 것만)
+def get_stats(user: sqlite3.Row = Depends(get_current_user)) -> dict:
+    with get_db() as conn:
+        streak = _recompute_streak(conn, user["id"])
+    return {"streak": streak}
 
 
 @app.post("/todos", status_code=201)             # 추가 — id 는 DB가 매긴다
 def create_todo(payload: TodoIn, user: sqlite3.Row = Depends(get_current_user)) -> TodoItem:
     with get_db() as conn:
         cur = conn.execute(
-            "INSERT INTO todos (user_id, title, description, completed) VALUES (?, ?, ?, ?)",
-            (user["id"], payload.title, payload.description, int(payload.completed)),
+            "INSERT INTO todos (user_id, title, description, completed, priority, due_date) VALUES (?, ?, ?, ?, ?, ?)",
+            (
+                user["id"], payload.title, payload.description, int(payload.completed),
+                payload.priority, payload.due_date.isoformat() if payload.due_date else None,
+            ),
         )
         todo_id = cur.lastrowid
     return TodoItem(id=todo_id, **payload.model_dump())
@@ -225,8 +310,11 @@ def create_todo(payload: TodoIn, user: sqlite3.Row = Depends(get_current_user)) 
 def update_todo(todo_id: int, payload: TodoIn, user: sqlite3.Row = Depends(get_current_user)) -> TodoItem:
     with get_db() as conn:
         cur = conn.execute(
-            "UPDATE todos SET title = ?, description = ?, completed = ? WHERE id = ? AND user_id = ?",
-            (payload.title, payload.description, int(payload.completed), todo_id, user["id"]),
+            "UPDATE todos SET title = ?, description = ?, completed = ?, priority = ?, due_date = ? WHERE id = ? AND user_id = ?",
+            (
+                payload.title, payload.description, int(payload.completed), payload.priority,
+                payload.due_date.isoformat() if payload.due_date else None, todo_id, user["id"],
+            ),
         )
         if cur.rowcount == 0:
             raise HTTPException(404, "To-Do item not found")

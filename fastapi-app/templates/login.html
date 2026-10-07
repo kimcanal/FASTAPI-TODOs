@@ -3,59 +3,70 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login · To-Do List</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+    <title>투두 프린세스 · Login</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-from: #eef2ff;
-            --bg-to: #f5f3ff;
-            --card: #ffffff;
-            --ink: #1f2430;
-            --muted: #6b7280;
-            --border: #e5e7eb;
-            --accent: #6366f1;
+            --bg-pink: #ffd6ec;
+            --bg-lavender: #f1dcff;
+            --card: #fff6fb;
+            --card-border: #f0c869;
+            --ink: #6b3a52;
+            --muted: #b98aa5;
+            --border: #f7d7ea;
+            --accent: #ec6ba1;
+            --accent-dark: #d44f87;
             --accent-ink: #ffffff;
-            --danger: #991b1b;
-            --danger-bg: #fef2f2;
+            --danger: #e2607a;
+            --danger-bg: #fff0f5;
+            --cursor-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='24' font-size='26'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E") 6 6, auto;
         }
         * { box-sizing: border-box; }
+        html, body { cursor: var(--cursor-icon); }
         body {
-            font-family: "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+            font-family: "Jua", "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
             max-width: 360px;
             margin: 4rem auto;
             padding: 0 1rem;
             color: var(--ink);
-            background: linear-gradient(160deg, var(--bg-from), var(--bg-to));
+            background: linear-gradient(165deg, var(--bg-pink) 0%, var(--bg-pink) 35%, var(--bg-lavender) 100%);
             min-height: 100vh;
         }
         @media (max-width: 480px) { body { margin: 2rem auto; } }
         h1 { font-size: 1.4rem; text-align: center; margin: 0 0 1.25rem; }
         .card {
             background: var(--card);
-            border-radius: 16px;
+            border: 3px solid var(--card-border);
+            border-radius: 22px;
             padding: 1.5rem;
-            box-shadow: 0 10px 30px -12px rgba(30, 41, 59, .18);
+            box-shadow: 0 10px 30px -14px rgba(214, 51, 132, .22);
         }
         form { display: flex; flex-direction: column; gap: .7rem; }
         input[type="text"], input[type="password"] {
             padding: .6rem .75rem;
-            border: 1px solid var(--border);
-            border-radius: 10px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
             font-size: 1rem;
+            background: #fff8fc;
+            color: var(--ink);
             outline: none;
         }
-        input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(99 102 241 / .15); }
+        input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgb(236 107 161 / .2); }
         button[type="submit"] {
             border: none;
-            border-radius: 10px;
+            border-radius: 999px;
             padding: .65rem 1rem;
             font-size: .95rem;
             font-weight: 600;
-            cursor: pointer;
+            font-family: inherit;
+            cursor: var(--cursor-icon);
             background: var(--accent);
             color: var(--accent-ink);
         }
-        button[type="submit"]:hover { opacity: .9; }
+        button[type="submit"]:hover { background: var(--accent-dark); }
         #toggle {
             margin-top: 1rem;
             text-align: center;
@@ -65,16 +76,17 @@
         #toggle button {
             border: none;
             background: none;
-            color: var(--accent);
-            cursor: pointer;
+            color: var(--accent-dark);
+            cursor: var(--cursor-icon);
             font-size: .85rem;
+            font-family: inherit;
             text-decoration: underline;
             padding: 0;
         }
         #error {
             color: var(--danger);
             background: var(--danger-bg);
-            border: 1px solid #fecaca;
+            border: 1px solid #f6b8cf;
             border-radius: 10px;
             padding: .6rem .75rem;
             margin: 0 0 .8rem;
@@ -83,7 +95,7 @@
     </style>
 </head>
 <body>
-    <h1>📝 To-Do List</h1>
+    <h1>👑 투두 프린세스</h1>
     <div class="card">
         <p id="error" role="alert" hidden></p>
         <form id="auth-form">

@@ -3,29 +3,37 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>To-Do List</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📝</text></svg>">
+    <title>투두 프린세스 · To-Do List</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-from: #eef2ff;
-            --bg-to: #f5f3ff;
-            --card: #ffffff;
-            --ink: #1f2430;
-            --muted: #6b7280;
-            --border: #e5e7eb;
-            --accent: #6366f1;
+            --bg-pink: #ffd6ec;
+            --bg-lavender: #f1dcff;
+            --card: #fff6fb;
+            --card-border: #f0c869;
+            --ink: #6b3a52;
+            --muted: #b98aa5;
+            --border: #f7d7ea;
+            --accent: #ec6ba1;
+            --accent-dark: #d44f87;
             --accent-ink: #ffffff;
-            --danger: #ef4444;
-            --danger-bg: #fef2f2;
+            --highlight: #ffd1ea;
+            --danger: #e2607a;
+            --danger-bg: #fff0f5;
+            --cursor-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='24' font-size='26'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E") 6 6, auto;
         }
         * { box-sizing: border-box; }
+        html, body { cursor: var(--cursor-icon); }
         body {
-            font-family: "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+            font-family: "Jua", "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
             max-width: 640px;
             margin: 3rem auto;
             padding: 0 1rem;
             color: var(--ink);
-            background: linear-gradient(160deg, var(--bg-from), var(--bg-to));
+            background: linear-gradient(165deg, var(--bg-pink) 0%, var(--bg-pink) 35%, var(--bg-lavender) 100%);
             min-height: 100vh;
         }
         @media (max-width: 480px) {
@@ -40,43 +48,83 @@
         }
         .card {
             background: var(--card);
-            border-radius: 16px;
+            border: 3px solid var(--card-border);
+            border-radius: 22px;
             padding: 1.5rem;
-            box-shadow: 0 10px 30px -12px rgba(30, 41, 59, .18);
+            box-shadow: 0 10px 30px -14px rgba(214, 51, 132, .22);
         }
         form { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
         input[type="text"] {
             flex: 1 1 12rem;
             padding: .6rem .75rem;
-            border: 1px solid var(--border);
-            border-radius: 10px;
+            border: 2px solid var(--border);
+            border-radius: 12px;
             font-size: 1rem;             /* 16px 미만이면 iOS Safari가 포커스 시 자동 확대함 */
             outline: none;
+            background: #fff8fc;
+            color: var(--ink);
             transition: border-color .15s, box-shadow .15s;
         }
         input[type="text"]:focus {
             border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgb(99 102 241 / .15);
+            box-shadow: 0 0 0 3px rgb(236 107 161 / .2);
         }
+        select, input[type="date"] {
+            padding: .6rem .6rem;
+            border: 2px solid var(--border);
+            border-radius: 12px;
+            font-size: .9rem;
+            font-family: inherit;
+            background: #fff8fc;
+            color: var(--ink);
+            outline: none;
+            cursor: var(--cursor-icon);
+        }
+        select:focus, input[type="date"]:focus {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgb(236 107 161 / .2);
+        }
+        #search { flex: 1 1 8rem; }
+        #celebrate {
+            background: var(--highlight);
+            color: var(--ink);
+            border: 2px solid var(--card-border);
+            border-radius: 12px;
+            padding: .6rem .75rem;
+            margin: 0 0 1rem;
+            font-size: .875rem;
+            text-align: center;
+            font-weight: 600;
+        }
+        .badge {
+            font-size: .75rem;
+            padding: .15rem .5rem;
+            border-radius: 999px;
+            background: var(--border);
+            color: var(--ink);
+            flex: none;
+        }
+        .badge.overdue { background: var(--danger-bg); color: var(--danger); font-weight: 600; }
         button {
             border: none;
-            border-radius: 10px;
-            padding: .6rem 1rem;
+            border-radius: 999px;
+            padding: .6rem 1.1rem;
             font-size: .9rem;
-            cursor: pointer;
+            font-family: inherit;
+            cursor: var(--cursor-icon);
             transition: transform .1s, opacity .15s, background .15s;
         }
-        button:active { transform: scale(.97); }
+        button:active { transform: scale(.94); }
         form button[type="submit"] {
             background: var(--accent);
             color: var(--accent-ink);
             font-weight: 600;
         }
-        form button[type="submit"]:hover { opacity: .9; }
+        form button[type="submit"]:hover { background: var(--accent-dark); }
         #error {
-            color: #991b1b;
+            color: var(--danger);
             background: var(--danger-bg);
-            border: 1px solid #fecaca;
+            border: 1px solid #f6b8cf;
             border-radius: 10px;
             padding: .6rem .75rem;
             margin: 0 0 1rem;
@@ -97,7 +145,7 @@
             padding: .35rem .8rem;
             border-radius: 999px;
         }
-        #filters button[data-filter]:hover { background: #f3f4f6; }
+        #filters button[data-filter]:hover { background: #fbdceb; }
         #filters button.active {
             background: var(--accent);
             color: var(--accent-ink);
@@ -122,24 +170,24 @@
             width: 1.15rem;
             height: 1.15rem;
             accent-color: var(--accent);
-            cursor: pointer;
+            cursor: var(--cursor-icon);
             flex: none;
         }
         li span { flex: 1 1 auto; min-width: 8rem; word-break: break-word; }
         .done { text-decoration: line-through; color: var(--muted); }
         li button {
-            background: #f3f4f6;
+            background: #fbdceb;
             color: var(--ink);
             font-size: .8rem;
             padding: .5rem .7rem;
             flex: none;
         }
-        li button:hover { background: #e5e7eb; }
+        li button:hover { background: #f6c3dc; }
         li button:last-child {
             background: var(--danger-bg);
             color: var(--danger);
         }
-        li button:last-child:hover { background: #fee2e2; }
+        li button:last-child:hover { background: #ffd9e4; }
         li.editing input[type="text"] {
             flex: 1 1 8rem;
             padding: .5rem .6rem;
@@ -164,31 +212,44 @@
         }
         #user-bar button {
             background: transparent;
-            border: 1px solid var(--border);
+            border: 2px solid var(--border);
             color: var(--muted);
             padding: .3rem .7rem;
             font-size: .8rem;
         }
-        #user-bar button:hover { background: #f3f4f6; }
+        #user-bar button:hover { background: #fbdceb; }
     </style>
 </head>
 <body>
     <div id="user-bar">
+        <span id="streak-info"></span>
         <span id="username-info"></span>
         <button type="button" id="logout-btn">로그아웃</button>
     </div>
-    <h1>📝 To-Do List</h1>
+    <h1>👑 투두 프린세스의 할 일 목록</h1>
     <div class="card">
         <form id="todo-form">
             <input type="text" id="title" placeholder="제목 (예: 20231234)" required>
             <input type="text" id="description" placeholder="설명 (예: 홍길동)">
+            <select id="priority">
+                <option value="normal">💌 일반</option>
+                <option value="high">👑 중요</option>
+            </select>
+            <input type="date" id="due-date">
             <button type="submit">추가</button>
         </form>
         <p id="error" role="alert" hidden></p>
+        <p id="celebrate" hidden>🎉 오늘도 고생했어요 공주님! 할 일을 전부 끝냈어요.</p>
         <div id="filters">
             <button data-filter="all" class="active">전체</button>
             <button data-filter="active">진행중</button>
             <button data-filter="completed">완료</button>
+            <input type="text" id="search" placeholder="🔍 검색">
+            <select id="sort">
+                <option value="">정렬: 기본</option>
+                <option value="due_date">마감일순</option>
+                <option value="priority">우선순위순</option>
+            </select>
             <span id="count"></span>
         </div>
         <ul id="todo-list"></ul>
@@ -200,9 +261,20 @@
     <script>
         const $ = (id) => document.getElementById(id);
         const listEl = $("todo-list"), errorEl = $("error"), countEl = $("count");
+        const celebrateEl = $("celebrate");
         let allTodos = [];
         let filter = "all";
+        let search = "";
+        let sortMode = "";
         let editingId = null;
+
+        const PRIORITY_LABEL = { high: "👑 중요", normal: "💌 일반" };
+
+        function formatDueDate(dueDate, completed) {
+          if (!dueDate) return null;
+          const isOverdue = !completed && dueDate < new Date().toISOString().slice(0, 10);
+          return { text: `📅 ${dueDate}${isOverdue ? " (지남)" : ""}`, overdue: isOverdue };
+        }
 
         // 모든 요청을 한 곳에서 처리하고, 실패는 조용히 넘기지 않는다
         async function api(url, method = "GET", body) {
@@ -229,7 +301,7 @@
         }
 
         const load = () => run("목록 불러오기", async () => { allTodos = await api("/todos"); render(); });
-        const save = (id, todo) => run("수정", async () => { await api(`/todos/${id}`, "PUT", todo); await load(); });
+        const save = (id, todo) => run("수정", async () => { await api(`/todos/${id}`, "PUT", todo); await load(); await loadStats(); });
 
         function button(label, onclick) {
           return Object.assign(document.createElement("button"), { textContent: label, onclick });
@@ -247,13 +319,25 @@
           btn.onclick = () => setFilter(btn.dataset.filter);
         }
 
+        $("search").oninput = (e) => { search = e.target.value; render(); };
+        $("sort").onchange = (e) => { sortMode = e.target.value; render(); };
+
         function render() {
-          const todos = allTodos.filter((todo) => {
-            if (filter === "active") return !todo.completed;
-            if (filter === "completed") return todo.completed;
-            return true;
+          let todos = allTodos.filter((todo) => {
+            if (filter === "active" && todo.completed) return false;
+            if (filter === "completed" && !todo.completed) return false;
+            const needle = search.trim().toLowerCase();
+            if (!needle) return true;
+            return todo.title.toLowerCase().includes(needle) || todo.description.toLowerCase().includes(needle);
           });
-          countEl.textContent = `${allTodos.filter((t) => !t.completed).length}개 남음`;
+          if (sortMode === "due_date") {
+            todos = [...todos].sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
+          } else if (sortMode === "priority") {
+            const order = { high: 0, normal: 1 };
+            todos = [...todos].sort((a, b) => order[a.priority] - order[b.priority]);
+          }
+          countEl.textContent = `오늘 남은 일들은 ${allTodos.filter((t) => !t.completed).length}개입니다.`;
+          celebrateEl.hidden = !(allTodos.length > 0 && allTodos.every((t) => t.completed));
           listEl.replaceChildren(...todos.map((todo) => {
             const li = document.createElement("li");
 
@@ -265,12 +349,22 @@
               const descInput = Object.assign(document.createElement("input"), {
                 type: "text", value: todo.description, className: "edit-description",
               });
+              const priorityInput = Object.assign(document.createElement("select"), { className: "edit-priority" });
+              for (const [value, label] of Object.entries(PRIORITY_LABEL)) {
+                priorityInput.append(new Option(label, value, false, todo.priority === value));
+              }
+              const dueDateInput = Object.assign(document.createElement("input"), {
+                type: "date", value: todo.due_date ?? "", className: "edit-due-date",
+              });
               const onKey = (e) => {
                 if (e.key === "Enter") submitEdit(todo, li);
                 if (e.key === "Escape") cancelEdit();
               };
               titleInput.onkeydown = descInput.onkeydown = onKey;
-              li.append(titleInput, descInput, button("저장", () => submitEdit(todo, li)), button("취소", cancelEdit));
+              li.append(
+                titleInput, descInput, priorityInput, dueDateInput,
+                button("저장", () => submitEdit(todo, li)), button("취소", cancelEdit),
+              );
               return li;
             }
 
@@ -280,10 +374,18 @@
               onchange: () => save(todo.id, { ...todo, completed: check.checked }),
             });
             const text = Object.assign(document.createElement("span"), {
-              textContent: `${todo.title} — ${todo.description}`,
+              textContent: `${PRIORITY_LABEL[todo.priority]} ${todo.title} — ${todo.description}`,
               className: todo.completed ? "done" : "",
             });
-            li.append(check, text, button("수정", () => startEdit(todo.id)), button("삭제", () => remove(todo.id)));
+            li.append(check, text);
+            const due = formatDueDate(todo.due_date, todo.completed);
+            if (due) {
+              li.append(Object.assign(document.createElement("span"), {
+                textContent: due.text,
+                className: due.overdue ? "badge overdue" : "badge",
+              }));
+            }
+            li.append(button("수정", () => startEdit(todo.id)), button("삭제", () => remove(todo.id)));
             return li;
           }));
 
@@ -308,13 +410,15 @@
             return;
           }
           const description = li.querySelector(".edit-description").value.trim();
+          const priority = li.querySelector(".edit-priority").value;
+          const dueDate = li.querySelector(".edit-due-date").value || null;
           editingId = null;
-          save(todo.id, { ...todo, title, description });
+          save(todo.id, { ...todo, title, description, priority, due_date: dueDate });
         }
 
         function remove(id) {
           if (!confirm("정말 삭제할까요?")) return;
-          run("삭제", async () => { await api(`/todos/${id}`, "DELETE"); await load(); });
+          run("삭제", async () => { await api(`/todos/${id}`, "DELETE"); await load(); await loadStats(); });
         }
 
         $("todo-form").onsubmit = (event) => {
@@ -326,11 +430,26 @@
             return;
           }
           run("추가", async () => {
-            await api("/todos", "POST", { title, description: $("description").value.trim() });
+            await api("/todos", "POST", {
+              title,
+              description: $("description").value.trim(),
+              priority: $("priority").value,
+              due_date: $("due-date").value || null,
+            });
             event.target.reset();
             await load();
+            await loadStats();
           });
         };
+
+        async function loadStats() {
+          try {
+            const info = await api("/stats");
+            $("streak-info").textContent = info.streak > 0 ? `🔥 ${info.streak}일 연속 달성 중!` : "";
+          } catch {
+            $("streak-info").textContent = "";
+          }
+        }
 
         async function loadVersion() {
           try {
@@ -358,6 +477,7 @@
         load();
         loadVersion();
         loadUser();
+        loadStats();
     </script>
 </body>
 </html>

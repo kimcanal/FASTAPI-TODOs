@@ -3,6 +3,20 @@
 이 프로젝트의 주요 변경 사항을 기록합니다.
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따릅니다.
 
+## [5.0.0] - 2026-10-08
+
+### Added
+
+- SonarQube 정적분석을 CI에 통합 (`docker-compose.yml`에 `sonarqube`/`sonar-db` 서비스, `sonar-project.properties`, Jenkins 파이프라인에 `SonarQube Analysis`/`Quality Gate` 스테이지) — pytest 커버리지(`coverage.xml`)를 그대로 재사용해 스캔
+- 할 일에 우선순위(`priority`: 👑 중요 / 💌 일반)와 마감일(`due_date`) 필드 추가, 지난 마감일은 목록에서 빨간 뱃지로 강조
+- 할 일 목록 검색(제목·설명)과 정렬(마감일순/우선순위순) 추가
+- 할 일을 모두 끝내면 축하 배너가 뜨고, 매일 전부 완료하면 연속 달성 스트릭을 집계해 보여주는 `GET /stats` API 추가
+- 핑크·골드 톤의 "투두 프린세스" 테마로 전체 화면(로그인/목록/릴리스노트) 리디자인 — 커스텀 커서, 구글 폰트(Jua) 적용
+
+### Changed
+
+- `todos` 테이블에 `priority`/`due_date` 컬럼 추가, 기존 DB(볼륨)도 자동 마이그레이션되도록 처리
+
 ## [4.0.0] - 2026-10-02
 
 ### Added

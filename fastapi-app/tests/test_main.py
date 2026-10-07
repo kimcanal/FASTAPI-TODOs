@@ -193,6 +193,73 @@ def test_users_cannot_see_or_modify_each_others_todos(client):
     assert client.get("/todos").json() == [todo]
 
 
+def test_todo_defaults_to_normal_priority_and_no_due_date(client):
+    register(client, "alice", "secret1")
+    created = client.post("/todos", json={"title": "우유 사기"}).json()
+    assert created["priority"] == "normal"
+    assert created["due_date"] is None
+
+
+def test_todo_priority_and_due_date_roundtrip(client):
+    register(client, "alice", "secret1")
+    created = client.post(
+        "/todos",
+        json={"title": "발표 준비", "priority": "high", "due_date": "2026-12-25"},
+    ).json()
+    assert created["priority"] == "high"
+    assert created["due_date"] == "2026-12-25"
+
+    updated = client.put(
+        f"/todos/{created['id']}",
+        json={"title": "발표 준비", "priority": "normal", "due_date": None},
+    ).json()
+    assert updated["priority"] == "normal"
+    assert updated["due_date"] is None
+
+
+def test_todo_search_filters_by_title_and_description(client):
+    register(client, "alice", "secret1")
+    client.post("/todos", json={"title": "우유 사기", "description": "2%"})
+    client.post("/todos", json={"title": "운동하기", "description": "헬스장"})
+
+    response = client.get("/todos", params={"q": "우유"})
+    assert [t["title"] for t in response.json()] == ["우유 사기"]
+
+    response = client.get("/todos", params={"q": "헬스"})
+    assert [t["title"] for t in response.json()] == ["운동하기"]
+
+
+def test_todo_sort_by_priority_puts_high_first(client):
+    register(client, "alice", "secret1")
+    client.post("/todos", json={"title": "일반 할 일", "priority": "normal"})
+    client.post("/todos", json={"title": "중요한 할 일", "priority": "high"})
+
+    response = client.get("/todos", params={"sort": "priority"})
+    assert [t["title"] for t in response.json()] == ["중요한 할 일", "일반 할 일"]
+
+
+def test_todo_sort_by_due_date_puts_items_without_due_date_last(client):
+    register(client, "alice", "secret1")
+    client.post("/todos", json={"title": "날짜 없음"})
+    client.post("/todos", json={"title": "먼 미래", "due_date": "2026-12-31"})
+    client.post("/todos", json={"title": "가까운 미래", "due_date": "2026-11-01"})
+
+    response = client.get("/todos", params={"sort": "due_date"})
+    assert [t["title"] for t in response.json()] == ["가까운 미래", "먼 미래", "날짜 없음"]
+
+
+def test_stats_streak_increments_once_per_day_when_all_done(client):
+    register(client, "alice", "secret1")
+    created = client.post("/todos", json={"title": "할 일"}).json()
+
+    assert client.get("/stats").json()["streak"] == 0
+
+    client.put(f"/todos/{created['id']}", json={"title": "할 일", "completed": True})
+    assert client.get("/stats").json()["streak"] == 1
+    # 같은 날 다시 조회해도 중복으로 올라가지 않는다
+    assert client.get("/stats").json()["streak"] == 1
+
+
 def test_data_dir_env_moves_db_and_secret(tmp_path, monkeypatch):
     import importlib
 
