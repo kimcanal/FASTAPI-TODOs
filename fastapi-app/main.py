@@ -197,16 +197,13 @@ def _recompute_streak(conn: sqlite3.Connection, user_id: int) -> int:
     last_date = date.fromisoformat(stats["last_completed_date"]) if stats and stats["last_completed_date"] else None
     streak = stats["streak"] if stats else 0
 
-    if all_done_today:
-        if last_date == today:
-            pass
-        elif last_date == today - timedelta(days=1):
+    if all_done_today and last_date != today:
+        if last_date == today - timedelta(days=1):
             streak += 1
-            last_date = today
         else:
             streak = 1
-            last_date = today
-    elif last_date is not None and last_date < today - timedelta(days=1):
+        last_date = today
+    elif not all_done_today and last_date is not None and last_date < today - timedelta(days=1):
         streak = 0
 
     conn.execute(
