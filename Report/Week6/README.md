@@ -30,11 +30,13 @@ sonar.python.coverage.reportPaths=fastapi-app/coverage.xml
 | 커버리지 | 99.4% |
 | **Security Hotspot** | **1건** |
 
-![SonarQube 1차 분석 대시보드](./(1)-1_SonarQube_1차분석_대시보드.png)
+![SonarQube 1차 분석 대시보드](./(1)-1_SonarQube_1차분석_대시보드.jpg)
 
 ## (2) 발견사항별 검토 의견
 
-### Security Hotspot — [`fastapi-app/Dockerfile:22`](../../fastapi-app/Dockerfile)
+1차 분석에서 나온 것 1건, 기능 개선 작업 중 2차 분석에서 새로 나온 것 1건 — 총 2건을 검토했습니다.
+
+### ① Security Hotspot — [`fastapi-app/Dockerfile:22`](../../fastapi-app/Dockerfile) *(1차 분석에서 발견)*
 
 ```dockerfile
 COPY --chown=appuser:appuser . .
@@ -46,18 +48,23 @@ COPY --chown=appuser:appuser . .
 - **수정 여부**: **코드 수정 없이 Safe로 리뷰 처리**. `COPY . .`을 개별 파일 나열로 바꾸는 방법도 있지만, 파일이 추가될 때마다 Dockerfile을 매번 갱신해야 해서 오히려 유지보수 부담과 누락 위험이 커집니다. `.dockerignore`로 제외 목록을 관리하는 현재 방식이 더 안전합니다.
 - **처리**: SonarQube UI → Security Hotspots → 해당 항목 → Status: **Safe** + 위 의견 코멘트.
 
-## (3) 개선 후 2차 분석
+### ② Code Smell — [`fastapi-app/main.py`](../../fastapi-app/main.py) (연속 스트릭 계산 로직) *(기능 개선 중 2차 분석에서 새로 발견)*
 
-이번 주 할 일 관리 기능 개선(아래 "기능 개선" 참고)을 반영해 코드가 달라졌고, 그 과정에서 SonarQube가 새 Code Smell 1건을 추가로 잡아냈습니다.
-
-### 신규 발견 — [`fastapi-app/main.py`](../../fastapi-app/main.py) (연속 스트릭 계산 로직)
+```python
+if last_date == today:
+    pass
+```
 
 - **규칙**: `python:S108` (MAJOR) — "Either remove or fill this block of code."
-- **내용**: `if last_date == today: pass` 처럼 아무 동작도 하지 않는 빈 분기가 있으면, 구현을 깜빡한 TODO인지 의도한 것인지 알 수 없어 경고합니다.
+- **내용**: 아무 동작도 하지 않는 빈 분기가 있으면, 구현을 깜빡한 TODO인지 의도한 것인지 알 수 없어 경고합니다.
 - **검토**: 의도한 no-op(오늘 이미 스트릭을 세었으면 아무것도 안 함)이 맞았지만, 빈 분기로 남겨두는 대신 조건 자체를 재구성하면 더 명확하다고 판단했습니다.
-- **수정**: `if all_done_today: if last_date == today: pass / elif ... / else ...` 구조를 `if all_done_today and last_date != today: ...`로 바꿔 빈 분기를 아예 없앴습니다 ([커밋 4047834](https://github.com/kimcanal/FASTAPI-TODOs/commit/4047834)).
+- **수정 여부**: **수정함**. `if all_done_today: if last_date == today: pass / elif ... / else ...` 구조를 `if all_done_today and last_date != today: ...`로 바꿔 빈 분기를 아예 없앴습니다 ([커밋 4047834](https://github.com/kimcanal/FASTAPI-TODOs/commit/4047834)).
 
-### 2차 분석 결과 (빌드 #11, v5.0.0 + 위 수정 반영)
+## (3) 개선 후 2차 분석
+
+이번 주 할 일 관리 기능 개선(아래 "기능 개선" 참고)을 반영한 뒤, 위 ②에서 정리한 수정사항까지 반영해서 2차 분석을 돌렸습니다.
+
+### 2차 분석 결과 (빌드 #11, v5.0.0 + 수정사항 반영)
 
 | 지표 | 1차 | 2차 |
 |---|---|---|
@@ -69,7 +76,7 @@ COPY --chown=appuser:appuser . .
 | Security Hotspot | 1건 (Safe 처리) | 1건 (동일, Safe 유지) |
 | Quality Gate | — | **Passed** |
 
-![SonarQube 2차 분석 대시보드](./(3)-1_SonarQube_2차분석_대시보드.png)
+![SonarQube 2차 분석 대시보드](./(3)-1_SonarQube_2차분석_대시보드.jpg)
 
 ### 겸사겸사 진행한 기능 개선 (v5.0.0)
 
@@ -82,28 +89,18 @@ COPY --chown=appuser:appuser . .
 
 ## (4) Claude Code로 OWASP Top 10 분석
 
-`fastapi-app/main.py`, `Dockerfile`, `docker-compose.yml`, 세션/인증 설정을 OWASP Top 10 (2021) 기준으로 Claude Code가 직접 코드 리뷰했습니다. SonarQube는 범용 정적분석(버그/스멜/중복)인 반면, 이 리뷰는 "공격자 관점에서 뭐가 뚫리는가"에 초점을 맞춘 것이라 서로 다른 종류의 이슈를 찾아냅니다.
+`fastapi-app/main.py`, `Dockerfile`, `docker-compose.yml`, 세션/인증 설정을 OWASP Top 10 (2021) 기준으로 Claude Code가 직접 코드 리뷰하고, 별도 보고서로 작성했습니다. SonarQube는 범용 정적분석(버그/스멜/중복)인 반면, 이 리뷰는 "공격자 관점에서 뭐가 뚫리는가"에 초점을 맞춘 것이라 서로 다른 종류의 이슈를 찾아냅니다.
 
-| OWASP 분류 | 해당 여부 | 발견 사항 | 위험도 | 권고 |
-|---|---|---|---|---|
-| **A01 Broken Access Control** | 검토함 | 모든 `/todos` 쿼리가 `WHERE user_id = ?`로 필터링되고, 테스트(`test_users_cannot_see_or_modify_each_others_todos`)로 계정 간 격리를 검증함 | - | 문제 없음 |
-| **A02 Cryptographic Failures** | **해당** | 세션 쿠키에 `https_only`/`Secure` 플래그가 설정되어 있지 않음 (`SessionMiddleware` 기본값) — 평문 HTTP 배포 시 쿠키가 그대로 노출될 수 있음 | 중간 | 배포를 HTTPS(리버스 프록시+TLS)로 전환하고 `SessionMiddleware(..., https_only=True)` 적용 |
-| **A03 Injection** | 검토함 | 모든 SQL이 `conn.execute("... WHERE id = ?", (id,))` 형태의 파라미터 바인딩만 사용, 문자열 포맷팅으로 쿼리를 조립하는 코드 없음 | - | 문제 없음 |
-| **A04 Insecure Design** | **해당** | 로그인/회원가입에 시도 횟수 제한이 없어 무차별 대입(Brute Force) 공격에 취약 | 중간 | 계정/IP 단위 rate limiting 또는 실패 횟수 기반 지연·잠금 추가 |
-| **A05 Security Misconfiguration** | **해당** | ① `/docs`, `/redoc`, `/openapi.json`이 인증 없이 공개되어 API 구조가 그대로 노출됨 ② 보안 헤더(`X-Content-Type-Options`, `Content-Security-Policy` 등) 미설정 | 낮음 | 운영 환경에서는 `FastAPI(docs_url=None, redoc_url=None)`로 비활성화하거나 접근 제한, 보안 헤더 미들웨어 추가 |
-| **A06 Vulnerable/Outdated Components** | 검토함 | `requirements.txt`가 알려진 CVE가 패치된 하한 버전으로 고정됨(`fastapi>=0.142.0` 등, CHANGELOG 4.0.0 참고). 다만 상한이 없어 추후 상위 버전에서 호환성 깨질 가능성은 있음 | 낮음 | 정기적으로 `pip list --outdated` 점검 |
-| **A07 Identification & Authentication Failures** | **해당** | 비밀번호 최소 길이가 4자로 매우 짧음(`AuthIn.password: min_length=4`) | 중간 | 최소 8자 이상 + 복잡도 권장 문구 추가 |
-| **A08 Software/Data Integrity Failures** | 검토함 | `Dockerfile`의 `FROM python:3.13-slim`이 다이제스트(sha256) 고정 없이 태그만 사용 — 상위 이미지가 바뀔 수 있음 | 낮음 | `FROM python:3.13-slim@sha256:...`로 고정 고려 |
-| **A09 Security Logging & Monitoring Failures** | **해당** | 로그인 실패, 세션 무효화 등 보안 이벤트에 대한 로깅이 없음 | 낮음 | 실패한 로그인 시도 등을 구조화된 로그로 남기기 |
-| **A10 Server-Side Request Forgery** | 해당 없음 | 사용자 입력으로 서버가 외부 URL을 요청하는 기능이 없음 | - | - |
+**전체 보고서**: [`OWASP_TOP10.md`](./OWASP_TOP10.md)
 
 ### 요약
 
 - **즉시 조치가 필요한 치명적 취약점은 없음** (Injection, Access Control은 설계상 안전하게 되어 있음을 확인)
 - 가장 현실적인 리스크는 **A02(쿠키 미암호화 전송)**와 **A07(짧은 비밀번호 최소 길이)** — 둘 다 배포 설정/검증 규칙 한 줄 수준으로 고칠 수 있는 항목이라 다음 주차에 우선 반영 예정
 - A04(무차별 대입 방어 없음)는 실제 공격 시나리오로 이어질 수 있어 rate limiting 도입을 다음 개선 후보로 기록
+- SonarQube가 잡아낸 이슈는 Security Hotspot 1건뿐이었던 반면, 이 OWASP 리뷰는 설정·운영 수준의 보안 이슈 5건을 추가로 발견 — 정적분석 통과가 보안 점검 완료를 의미하지 않음을 보여줌
 
-![Claude Code OWASP 분석 화면](./(4)-1_Claude_Code_OWASP_분석_캡처.png)
+![Claude Code로 생성한 OWASP Top 10 분석 보고서](./(4)-1_Claude_Code_OWASP_분석_캡처.png)
 
 ## Claude Code 활용 내역 및 소감
 
