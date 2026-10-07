@@ -38,6 +38,7 @@ pipeline {
                 sh '''
                     fastapi-app/myenv/bin/pytest fastapi-app -v \
                         --cov=main --cov-report=term --cov-report=html:fastapi-app/htmlcov \
+                        --cov-report=xml:fastapi-app/coverage.xml \
                         --html=fastapi-app/report.html --self-contained-html \
                         --junitxml=fastapi-app/junit.xml
                 '''
@@ -46,6 +47,22 @@ pipeline {
                 always {
                     junit 'fastapi-app/junit.xml'
                     archiveArtifacts artifacts: 'fastapi-app/htmlcov/**, fastapi-app/report.html', allowEmptyArchive: true
+                }
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('sonarqube') {
+                    sh "${tool 'sonar'}/bin/sonar-scanner"
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
