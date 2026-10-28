@@ -28,6 +28,7 @@ CHANGELOG_FILE = BASE_DIR / "CHANGELOG.md"
 RELEASE_NOTES_TEMPLATE = BASE_DIR / "templates" / "release_notes.html"
 
 PBKDF2_ITERATIONS = 200_000
+TRASH_RETENTION_DAYS = 7                         # 휴지통 보관 기간 — 이 기간이 지나면 완전히 삭제
 
 
 @contextlib.contextmanager
@@ -82,8 +83,8 @@ def init_db() -> None:
             conn.execute("ALTER TABLE todos ADD COLUMN due_date TEXT")
         if "deleted_at" not in existing_columns:
             conn.execute("ALTER TABLE todos ADD COLUMN deleted_at TEXT")
-        # 실행취소 유예 기간(1일)이 지난 소프트 삭제 항목은 완전히 정리한다
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        # 휴지통 보관 기간이 지난 소프트 삭제 항목은 완전히 정리한다
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=TRASH_RETENTION_DAYS)).isoformat()
         conn.execute("DELETE FROM todos WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff,))
         conn.execute(
             """
@@ -163,6 +164,10 @@ class TodoIn(BaseModel):                         # 클라이언트가 보내는 
 
 class TodoItem(TodoIn):                          # 서버가 돌려주는 데이터 (id 있음)
     id: int
+
+
+class TrashedTodoItem(TodoItem):                 # 휴지통 목록용 — 삭제 시각 포함
+    deleted_at: str
 
 
 class AuthIn(BaseModel):
@@ -291,6 +296,20 @@ def get_todos(
     return todos
 
 
+@app.get("/todos/trash")                         # 휴지통 조회 (본인 것만, 삭제 최신순)
+def get_trash(user: sqlite3.Row = Depends(get_current_user)) -> list[TrashedTodoItem]:
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT id, title, description, completed, priority, due_date, deleted_at FROM todos "
+            "WHERE user_id = ? AND deleted_at IS NOT NULL ORDER BY deleted_at DESC",
+            (user["id"],),
+        ).fetchall()
+    return [
+        TrashedTodoItem(**_row_to_todo(row).model_dump(), deleted_at=row["deleted_at"])
+        for row in rows
+    ]
+
+
 @app.get("/stats")                               # 연속 완료 스트릭 조회 (본인 것만)
 def get_stats(user: sqlite3.Row = Depends(get_current_user)) -> dict:
     with get_db() as conn:
@@ -328,7 +347,7 @@ def update_todo(todo_id: int, payload: TodoIn, user: sqlite3.Row = Depends(get_c
     return TodoItem(id=todo_id, **payload.model_dump())
 
 
-@app.delete("/todos/{todo_id}", status_code=204)  # 삭제(소프트) — 본인 소유가 아니면 404, 1일간 복원 가능
+@app.delete("/todos/{todo_id}", status_code=204)  # 휴지통으로 이동(소프트 삭제) — 본인 소유가 아니면 404
 def delete_todo(todo_id: int, user: sqlite3.Row = Depends(get_current_user)) -> None:
     with get_db() as conn:
         cur = conn.execute(
@@ -339,11 +358,11 @@ def delete_todo(todo_id: int, user: sqlite3.Row = Depends(get_current_user)) -> 
             raise HTTPException(404, "To-Do item not found")
 
 
-@app.post("/todos/{todo_id}/restore")         # 삭제 취소(Undo) — 본인 소유가 아니거나 삭제된 적 없으면 404
+@app.post("/todos/{todo_id}/restore")         # 휴지통에서 복원 — 완료 여부는 미완료로 초기화됨
 def restore_todo(todo_id: int, user: sqlite3.Row = Depends(get_current_user)) -> TodoItem:
     with get_db() as conn:
         cur = conn.execute(
-            "UPDATE todos SET deleted_at = NULL WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL",
+            "UPDATE todos SET deleted_at = NULL, completed = 0 WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL",
             (todo_id, user["id"]),
         )
         if cur.rowcount == 0:

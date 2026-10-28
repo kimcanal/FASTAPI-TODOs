@@ -241,12 +241,27 @@
             padding: .4rem .8rem;
         }
         #undo-toast button:hover { background: var(--accent-dark); }
+        #trash-card { margin-top: 1rem; }
+        #trash-header {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: .5rem 1rem;
+            margin-bottom: .75rem;
+            padding-bottom: .75rem;
+            border-bottom: 1px solid var(--border);
+        }
+        #trash-header h2 { font-size: 1.05rem; margin: 0; }
+        #trash-header p { margin: 0; font-size: .8rem; color: var(--muted); flex: 1 1 14rem; }
+        #trash-empty { color: var(--muted); font-size: .9rem; padding: .5rem .25rem; }
+        #trash-list li span.trash-meta { flex: none; font-size: .78rem; color: var(--muted); }
     </style>
 </head>
 <body>
     <div id="user-bar">
         <span id="streak-info"></span>
         <span id="username-info"></span>
+        <button type="button" id="trash-toggle-btn">🗑 휴지통</button>
         <button type="button" id="logout-btn">로그아웃</button>
     </div>
     <h1>👑 투두 프린세스의 할 일 목록</h1>
@@ -276,6 +291,15 @@
             <span id="count"></span>
         </div>
         <ul id="todo-list"></ul>
+    </div>
+    <div class="card" id="trash-card" hidden>
+        <div id="trash-header">
+            <h2>🗑 휴지통</h2>
+            <p>삭제한 할 일은 7일 동안 보관되고, 그 전에 복원하지 않으면 자동으로 완전히 삭제됩니다. 복원하면 미완료 상태로 돌아옵니다.</p>
+            <button type="button" id="trash-close-btn">닫기</button>
+        </div>
+        <p id="trash-empty" hidden>휴지통이 비어 있어요.</p>
+        <ul id="trash-list"></ul>
     </div>
     <div id="undo-toast" hidden></div>
     <footer>
@@ -441,7 +465,9 @@
         }
 
         const UNDO_SECONDS = 5;
+        const TRASH_RETENTION_DAYS = 7;
         let undoTimer = null;
+        let trashedTodos = [];
 
         function hideUndoToast() {
           clearTimeout(undoTimer);
@@ -453,16 +479,21 @@
           clearTimeout(undoTimer);
           const toast = $("undo-toast");
           toast.replaceChildren(
-            Object.assign(document.createElement("span"), { textContent: "할 일을 삭제했어요." }),
-            button("실행취소", () => run("실행취소", async () => {
-              hideUndoToast();
-              await api(`/todos/${id}/restore`, "POST");
-              await load();
-              await loadStats();
-            })),
+            Object.assign(document.createElement("span"), { textContent: "할 일을 휴지통으로 보냈어요." }),
+            button("실행취소", () => { hideUndoToast(); restoreTodo(id); }),
           );
           toast.hidden = false;
           undoTimer = setTimeout(hideUndoToast, UNDO_SECONDS * 1000);
+        }
+
+        // 휴지통 패널(열려 있으면)과 본 목록을 함께 갱신하며 할 일을 복원한다 (복원 시 항상 미완료로 돌아옴)
+        function restoreTodo(id) {
+          return run("복원", async () => {
+            await api(`/todos/${id}/restore`, "POST");
+            await load();
+            await loadStats();
+            if (!$("trash-card").hidden) await loadTrash();
+          });
         }
 
         function remove(id) {
@@ -471,8 +502,40 @@
             await load();
             await loadStats();
             showUndoToast(id);
+            if (!$("trash-card").hidden) await loadTrash();
           });
         }
+
+        function daysLeftInTrash(deletedAt) {
+          const msLeft = new Date(deletedAt).getTime() + TRASH_RETENTION_DAYS * 86400000 - Date.now();
+          return Math.max(0, Math.ceil(msLeft / 86400000));
+        }
+
+        async function loadTrash() {
+          await run("휴지통 불러오기", async () => {
+            trashedTodos = await api("/todos/trash");
+            renderTrash();
+          });
+        }
+
+        function renderTrash() {
+          $("trash-empty").hidden = trashedTodos.length > 0;
+          $("trash-list").replaceChildren(...trashedTodos.map((todo) => {
+            const li = document.createElement("li");
+            const text = Object.assign(document.createElement("span"), {
+              textContent: `${PRIORITY_LABEL[todo.priority]} ${todo.title} — ${todo.description}`,
+            });
+            const meta = Object.assign(document.createElement("span"), {
+              className: "trash-meta",
+              textContent: `${daysLeftInTrash(todo.deleted_at)}일 후 완전 삭제`,
+            });
+            li.append(text, meta, button("복원", () => restoreTodo(todo.id)));
+            return li;
+          }));
+        }
+
+        $("trash-toggle-btn").onclick = () => { $("trash-card").hidden = false; loadTrash(); };
+        $("trash-close-btn").onclick = () => { $("trash-card").hidden = true; };
 
         $("todo-form").onsubmit = (event) => {
           event.preventDefault();

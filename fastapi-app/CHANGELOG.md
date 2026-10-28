@@ -9,7 +9,9 @@
 
 - Prometheus/Grafana/Node Exporter/cAdvisor 모니터링 스택을 `docker-compose.yml`에 추가 — 애플리케이션 메트릭(`/metrics`, `prometheus-fastapi-instrumentator`)과 시스템/컨테이너 메트릭(CPU·메모리·디스크·네트워크)을 수집해 Grafana 대시보드로 시각화
 - Prometheus는 서버 자신에게만 공개(`127.0.0.1:7070`), node-exporter/cadvisor는 외부 포트 없이 내부 네트워크로만 수집하도록 구성, Grafana는 비밀번호 정책(`GF_AUTH_BASIC_PASSWORD_POLICY`) 적용
-- 할 일 삭제 실행취소(Undo) 기능 추가 — 삭제는 소프트 삭제(`deleted_at`)로 처리되어 1일간 `POST /todos/{id}/restore`로 복원 가능, 화면에는 삭제 직후 5초간 "실행취소" 토스트가 표시됨
+- 할 일 삭제를 **휴지통** 방식으로 변경 — 삭제는 소프트 삭제(`deleted_at`)로 처리되어 7일간 보관되며, `GET /todos/trash`로 목록 확인 후 `POST /todos/{id}/restore`로 복원 가능 (7일이 지나면 서버 기동 시 자동으로 완전히 삭제됨)
+- 화면에 "🗑 휴지통" 패널 추가 — 삭제 직후 5초간 뜨는 "실행취소" 토스트와, 언제든 열어서 보관 중인 항목을 확인·복원할 수 있는 휴지통 버튼 모두 제공
+- 복원된 할 일은 완료 여부와 관계없이 항상 **미완료 상태**로 돌아옴
 
 ### Changed
 

@@ -127,6 +127,64 @@ def test_restoring_someone_elses_deleted_todo_returns_404(client):
     assert bob.post(f"/todos/{todo['id']}/restore").status_code == 404
 
 
+def test_restoring_a_completed_todo_marks_it_incomplete(client):
+    register(client, "alice", "secret1")
+    created = client.post("/todos", json={"title": "우유 사기"}).json()
+    client.put(f"/todos/{created['id']}", json={"title": "우유 사기", "completed": True})
+
+    client.delete(f"/todos/{created['id']}")
+    restored = client.post(f"/todos/{created['id']}/restore").json()
+
+    assert restored["completed"] is False
+
+
+def test_deleted_todo_appears_in_trash_until_restored(client):
+    register(client, "alice", "secret1")
+    created = client.post("/todos", json={"title": "우유 사기"}).json()
+
+    assert client.get("/todos/trash").json() == []
+
+    client.delete(f"/todos/{created['id']}")
+    trash = client.get("/todos/trash").json()
+    assert len(trash) == 1
+    assert trash[0]["id"] == created["id"]
+    assert "deleted_at" in trash[0]
+
+    client.post(f"/todos/{created['id']}/restore")
+    assert client.get("/todos/trash").json() == []
+
+
+def test_trash_is_scoped_to_owner(client):
+    register(client, "alice", "secret1")
+    todo = client.post("/todos", json={"title": "alice's secret"}).json()
+    client.delete(f"/todos/{todo['id']}")
+
+    bob = TestClient(main.app)
+    register(bob, "bob", "secret2")
+    assert bob.get("/todos/trash").json() == []
+
+
+def test_trash_older_than_retention_period_is_purged_on_startup(client):
+    from datetime import datetime, timedelta, timezone
+
+    register(client, "alice", "secret1")
+    recent = client.post("/todos", json={"title": "최근 삭제"}).json()
+    stale = client.post("/todos", json={"title": "오래된 삭제"}).json()
+    client.delete(f"/todos/{recent['id']}")
+    client.delete(f"/todos/{stale['id']}")
+
+    just_inside = datetime.now(timezone.utc) - timedelta(days=main.TRASH_RETENTION_DAYS) + timedelta(hours=1)
+    just_outside = datetime.now(timezone.utc) - timedelta(days=main.TRASH_RETENTION_DAYS) - timedelta(hours=1)
+    with main.get_db() as conn:
+        conn.execute("UPDATE todos SET deleted_at = ? WHERE id = ?", (just_inside.isoformat(), recent["id"]))
+        conn.execute("UPDATE todos SET deleted_at = ? WHERE id = ?", (just_outside.isoformat(), stale["id"]))
+
+    main.init_db()  # 배포/재시작 시 실행되는 정리 로직
+
+    trash_ids = {t["id"] for t in client.get("/todos/trash").json()}
+    assert trash_ids == {recent["id"]}
+
+
 def test_blank_title_is_rejected(client):
     register(client, "alice", "secret1")
     response = client.post("/todos", json={"title": "   "})
