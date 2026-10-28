@@ -5,7 +5,7 @@ import os
 import secrets
 import sqlite3
 import subprocess
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -69,7 +69,8 @@ def init_db() -> None:
                 description TEXT NOT NULL DEFAULT '',
                 completed INTEGER NOT NULL DEFAULT 0,
                 priority TEXT NOT NULL DEFAULT 'normal',
-                due_date TEXT
+                due_date TEXT,
+                deleted_at TEXT
             )
             """
         )
@@ -79,6 +80,11 @@ def init_db() -> None:
             conn.execute("ALTER TABLE todos ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'")
         if "due_date" not in existing_columns:
             conn.execute("ALTER TABLE todos ADD COLUMN due_date TEXT")
+        if "deleted_at" not in existing_columns:
+            conn.execute("ALTER TABLE todos ADD COLUMN deleted_at TEXT")
+        # 실행취소 유예 기간(1일)이 지난 소프트 삭제 항목은 완전히 정리한다
+        cutoff = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
+        conn.execute("DELETE FROM todos WHERE deleted_at IS NOT NULL AND deleted_at < ?", (cutoff,))
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS user_stats (
@@ -267,7 +273,8 @@ def get_todos(
 ) -> list[TodoItem]:
     with get_db() as conn:
         rows = conn.execute(
-            "SELECT id, title, description, completed, priority, due_date FROM todos WHERE user_id = ? ORDER BY id",
+            "SELECT id, title, description, completed, priority, due_date FROM todos "
+            "WHERE user_id = ? AND deleted_at IS NULL ORDER BY id",
             (user["id"],),
         ).fetchall()
     todos = [_row_to_todo(row) for row in rows]
@@ -309,7 +316,8 @@ def create_todo(payload: TodoIn, user: sqlite3.Row = Depends(get_current_user)) 
 def update_todo(todo_id: int, payload: TodoIn, user: sqlite3.Row = Depends(get_current_user)) -> TodoItem:
     with get_db() as conn:
         cur = conn.execute(
-            "UPDATE todos SET title = ?, description = ?, completed = ?, priority = ?, due_date = ? WHERE id = ? AND user_id = ?",
+            "UPDATE todos SET title = ?, description = ?, completed = ?, priority = ?, due_date = ? "
+            "WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
             (
                 payload.title, payload.description, int(payload.completed), payload.priority,
                 payload.due_date.isoformat() if payload.due_date else None, todo_id, user["id"],
@@ -320,12 +328,31 @@ def update_todo(todo_id: int, payload: TodoIn, user: sqlite3.Row = Depends(get_c
     return TodoItem(id=todo_id, **payload.model_dump())
 
 
-@app.delete("/todos/{todo_id}", status_code=204)  # 삭제 — 본인 소유가 아니면 404
+@app.delete("/todos/{todo_id}", status_code=204)  # 삭제(소프트) — 본인 소유가 아니면 404, 1일간 복원 가능
 def delete_todo(todo_id: int, user: sqlite3.Row = Depends(get_current_user)) -> None:
     with get_db() as conn:
-        cur = conn.execute("DELETE FROM todos WHERE id = ? AND user_id = ?", (todo_id, user["id"]))
+        cur = conn.execute(
+            "UPDATE todos SET deleted_at = ? WHERE id = ? AND user_id = ? AND deleted_at IS NULL",
+            (datetime.now(timezone.utc).isoformat(), todo_id, user["id"]),
+        )
         if cur.rowcount == 0:
             raise HTTPException(404, "To-Do item not found")
+
+
+@app.post("/todos/{todo_id}/restore")         # 삭제 취소(Undo) — 본인 소유가 아니거나 삭제된 적 없으면 404
+def restore_todo(todo_id: int, user: sqlite3.Row = Depends(get_current_user)) -> TodoItem:
+    with get_db() as conn:
+        cur = conn.execute(
+            "UPDATE todos SET deleted_at = NULL WHERE id = ? AND user_id = ? AND deleted_at IS NOT NULL",
+            (todo_id, user["id"]),
+        )
+        if cur.rowcount == 0:
+            raise HTTPException(404, "복원할 수 있는 삭제된 할 일을 찾을 수 없습니다")
+        row = conn.execute(
+            "SELECT id, title, description, completed, priority, due_date FROM todos WHERE id = ?",
+            (todo_id,),
+        ).fetchone()
+    return _row_to_todo(row)
 
 
 @app.get("/health", include_in_schema=False)     # 배포/모니터링용 헬스체크 (로그인 불필요)

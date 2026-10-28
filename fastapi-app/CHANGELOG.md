@@ -9,6 +9,7 @@
 
 - Prometheus/Grafana/Node Exporter/cAdvisor 모니터링 스택을 `docker-compose.yml`에 추가 — 애플리케이션 메트릭(`/metrics`, `prometheus-fastapi-instrumentator`)과 시스템/컨테이너 메트릭(CPU·메모리·디스크·네트워크)을 수집해 Grafana 대시보드로 시각화
 - Prometheus는 서버 자신에게만 공개(`127.0.0.1:7070`), node-exporter/cadvisor는 외부 포트 없이 내부 네트워크로만 수집하도록 구성, Grafana는 비밀번호 정책(`GF_AUTH_BASIC_PASSWORD_POLICY`) 적용
+- 할 일 삭제 실행취소(Undo) 기능 추가 — 삭제는 소프트 삭제(`deleted_at`)로 처리되어 1일간 `POST /todos/{id}/restore`로 복원 가능, 화면에는 삭제 직후 5초간 "실행취소" 토스트가 표시됨
 
 ### Changed
 

@@ -218,6 +218,29 @@
             font-size: .8rem;
         }
         #user-bar button:hover { background: #fbdceb; }
+        #undo-toast {
+            position: fixed;
+            left: 50%;
+            bottom: 1.5rem;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: .75rem;
+            background: var(--ink);
+            color: #fff6fb;
+            padding: .7rem 1rem;
+            border-radius: 14px;
+            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .35);
+            font-size: .9rem;
+            z-index: 10;
+        }
+        #undo-toast button {
+            background: var(--accent);
+            color: #fff;
+            font-weight: 600;
+            padding: .4rem .8rem;
+        }
+        #undo-toast button:hover { background: var(--accent-dark); }
     </style>
 </head>
 <body>
@@ -254,6 +277,7 @@
         </div>
         <ul id="todo-list"></ul>
     </div>
+    <div id="undo-toast" hidden></div>
     <footer>
         <span id="version-info">버전 확인 중…</span>
         · <a href="/release-notes">릴리스 노트</a>
@@ -416,9 +440,38 @@
           save(todo.id, { ...todo, title, description, priority, due_date: dueDate });
         }
 
+        const UNDO_SECONDS = 5;
+        let undoTimer = null;
+
+        function hideUndoToast() {
+          clearTimeout(undoTimer);
+          undoTimer = null;
+          $("undo-toast").hidden = true;
+        }
+
+        function showUndoToast(id) {
+          clearTimeout(undoTimer);
+          const toast = $("undo-toast");
+          toast.replaceChildren(
+            Object.assign(document.createElement("span"), { textContent: "할 일을 삭제했어요." }),
+            button("실행취소", () => run("실행취소", async () => {
+              hideUndoToast();
+              await api(`/todos/${id}/restore`, "POST");
+              await load();
+              await loadStats();
+            })),
+          );
+          toast.hidden = false;
+          undoTimer = setTimeout(hideUndoToast, UNDO_SECONDS * 1000);
+        }
+
         function remove(id) {
-          if (!confirm("정말 삭제할까요?")) return;
-          run("삭제", async () => { await api(`/todos/${id}`, "DELETE"); await load(); await loadStats(); });
+          run("삭제", async () => {
+            await api(`/todos/${id}`, "DELETE");
+            await load();
+            await loadStats();
+            showUndoToast(id);
+          });
         }
 
         $("todo-form").onsubmit = (event) => {

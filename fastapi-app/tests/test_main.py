@@ -98,6 +98,35 @@ def test_todo_crud_roundtrip(client):
     assert client.get("/todos").json() == []
 
 
+def test_deleted_todo_can_be_restored(client):
+    register(client, "alice", "secret1")
+    created = client.post("/todos", json={"title": "우유 사기"}).json()
+
+    assert client.delete(f"/todos/{created['id']}").status_code == 204
+    assert client.get("/todos").json() == []
+
+    restored = client.post(f"/todos/{created['id']}/restore")
+    assert restored.status_code == 200
+    assert restored.json() == created
+    assert client.get("/todos").json() == [created]
+
+
+def test_restoring_a_todo_that_was_never_deleted_returns_404(client):
+    register(client, "alice", "secret1")
+    created = client.post("/todos", json={"title": "우유 사기"}).json()
+    assert client.post(f"/todos/{created['id']}/restore").status_code == 404
+
+
+def test_restoring_someone_elses_deleted_todo_returns_404(client):
+    register(client, "alice", "secret1")
+    todo = client.post("/todos", json={"title": "alice's secret"}).json()
+    client.delete(f"/todos/{todo['id']}")
+
+    bob = TestClient(main.app)
+    register(bob, "bob", "secret2")
+    assert bob.post(f"/todos/{todo['id']}/restore").status_code == 404
+
+
 def test_blank_title_is_rejected(client):
     register(client, "alice", "secret1")
     response = client.post("/todos", json={"title": "   "})
