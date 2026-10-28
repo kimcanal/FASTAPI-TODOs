@@ -12,6 +12,7 @@ from typing import Literal
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from markdown_it import MarkdownIt
+from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, Field, field_validator
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -134,6 +135,7 @@ BUILD_NUMBER = os.environ.get("BUILD_NUMBER", "local")   # Jenkins가 자동으�
 
 app = FastAPI(title="To-Do List API")
 app.add_middleware(SessionMiddleware, secret_key=_get_or_create_session_secret(), max_age=14 * 24 * 3600)
+Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
 
 
 class TodoIn(BaseModel):                         # 클라이언트가 보내는 데이터 (id 없음)

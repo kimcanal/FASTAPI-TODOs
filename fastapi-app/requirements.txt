@@ -3,3 +3,5 @@ starlette>=1.7.0          # CVE-2026-48710(Host 헤더) 등 보안 패치가 들
 uvicorn[standard]>=0.54.0
 markdown-it-py>=4.0.0
 itsdangerous>=2.2.0
+prometheus-fastapi-instrumentator>=8.1.0   # Starlette 1.x 지원 버전 (7.x 이하는 설치 충돌)
+prometheus-client>=0.26.0

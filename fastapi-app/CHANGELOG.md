@@ -3,6 +3,17 @@
 이 프로젝트의 주요 변경 사항을 기록합니다.
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따릅니다.
 
+## [6.0.0] - 2026-10-28
+
+### Added
+
+- Prometheus/Grafana/Node Exporter/cAdvisor 모니터링 스택을 `docker-compose.yml`에 추가 — 애플리케이션 메트릭(`/metrics`, `prometheus-fastapi-instrumentator`)과 시스템/컨테이너 메트릭(CPU·메모리·디스크·네트워크)을 수집해 Grafana 대시보드로 시각화
+- Prometheus는 서버 자신에게만 공개(`127.0.0.1:7070`), node-exporter/cadvisor는 외부 포트 없이 내부 네트워크로만 수집하도록 구성, Grafana는 비밀번호 정책(`GF_AUTH_BASIC_PASSWORD_POLICY`) 적용
+
+### Changed
+
+- 이미지 버전 고정: `prom/prometheus:v3.15.0`, `grafana/grafana:13.2.4`(2026-10-13 보안 패치), `prom/node-exporter:v1.12.1`, `ghcr.io/google/cadvisor:v0.60.6`
+
 ## [5.0.0] - 2026-10-08
 
 ### Added
