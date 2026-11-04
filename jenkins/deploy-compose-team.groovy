@@ -18,7 +18,7 @@ pipeline {
     }
 
     options {
-        timeout(time: 15, unit: 'MINUTES')
+        timeout(time: 30, unit: 'MINUTES')   // jmeter 이미지 빌드(JMeter tarball 다운로드)가 추가되어 넉넉히 잡음
         disableConcurrentBuilds()
     }
 
