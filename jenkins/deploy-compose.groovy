@@ -67,6 +67,22 @@ pipeline {
             }
         }
 
+        // 팀 서버가 archive.apache.org 접근이 느리거나 막혀 있어, jmeter 이미지를
+        // Dockerfile로 직접 빌드하지 못한다(JMeter tarball 다운로드 단계에서 멈춤).
+        // Docker Hub pull은 팀 서버에서 이미 정상 동작하므로(기존 dockerhub 배포 파이프라인),
+        // 네트워크가 되는 이 서버(Jenkins 에이전트)에서 미리 빌드해 올려두고 팀 서버는 pull만 한다.
+        stage('Build & Push JMeter Image') {
+            steps {
+                script {
+                    def jmImg = docker.build('lucatonikroos/jmeter-fastapi-todos:' + env.BUILD_NUMBER, '--pull jmeter')
+                    docker.withRegistry('https://index.docker.io/v1/', 'dockerhub-credentials') {
+                        jmImg.push()
+                        jmImg.push('latest')
+                    }
+                }
+            }
+        }
+
         // 테스트를 통과해야만 여기(Docker 빌드/배포)로 넘어온다
         stage('Deploy') {
             steps {
