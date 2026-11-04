@@ -3,6 +3,21 @@
 이 프로젝트의 주요 변경 사항을 기록합니다.
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따릅니다.
 
+## [7.0.0] - 2026-11-04
+
+### Added
+
+- JMeter 부하 테스트를 `docker-compose.yml`에 추가 (`jmeter` 서비스) — 회원가입으로 세션을 만든 뒤 `/health`, `/todos`(조회·생성)를 호출하는 테스트 플랜(`jmeter/fastapi_test_plan.jmx`), 사용자 10명·10초 램프업
+- InfluxDB(1.8)를 추가해 JMeter 백엔드 리스너(`InfluxdbBackendListenerClient`)가 테스트 중 실시간으로 메트릭을 적재하도록 구성, Grafana에 InfluxDB 데이터소스 + JMeter 전용 대시보드(grafana.com ID 5496) 연결
+- 할 일 CSV 내보내기/가져오기 추가 — `GET /todos/export`로 본인 할 일을 CSV로 내려받고, `GET /todos/import`로 CSV 파일을 업로드해 일괄 추가 (기존 항목은 그대로 둠, 유효하지 않은 행은 건너뛰고 개수 안내)
+
+### Changed
+
+- 이미지 버전 고정/갱신: `sonarqube:26.10.0.133078-community`, `prom/prometheus:v3.15.1`, `grafana/grafana:13.3.0`
+- SonarQube/Prometheus/Grafana 포트를 `127.0.0.1`에만 바인딩 (기존엔 전체 공개) — 접속은 SSH 터널 또는 Tailscale로. node-exporter/cadvisor는 원래부터 외부 미공개
+- Grafana 관리자 비밀번호를 `.env`(git 미포함) 참조로 전환, 회원가입/익명 접근 비활성화(`GF_USERS_ALLOW_SIGN_UP`, `GF_AUTH_ANONYMOUS_ENABLED`)
+- 모든 서비스를 전용 네트워크(`loadtest-net`)로 묶음 — JMeter가 내부 네트워크로 앱/InfluxDB에 접근
+
 ## [6.0.0] - 2026-10-28
 
 ### Added

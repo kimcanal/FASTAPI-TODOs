@@ -15,3 +15,6 @@ fastapi-app/.coverage
 .pytest_cache/
 fastapi-app/.pytest_cache/
 .env
+jmeter/results.jtl
+jmeter/report/
+jmeter/jmeter.log

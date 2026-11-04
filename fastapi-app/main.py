@@ -1,6 +1,8 @@
 import contextlib
+import csv
 import hashlib
 import hmac
+import io
 import os
 import secrets
 import sqlite3
@@ -9,11 +11,11 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
-from fastapi import Depends, FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi import Depends, FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from markdown_it import MarkdownIt
 from prometheus_fastapi_instrumentator import Instrumentator
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from starlette.middleware.sessions import SessionMiddleware
 
 BASE_DIR = Path(__file__).resolve().parent       # main.py 가 있는 폴더
@@ -308,6 +310,62 @@ def get_trash(user: sqlite3.Row = Depends(get_current_user)) -> list[TrashedTodo
         TrashedTodoItem(**_row_to_todo(row).model_dump(), deleted_at=row["deleted_at"])
         for row in rows
     ]
+
+
+CSV_FIELDS = ["title", "description", "completed", "priority", "due_date"]
+
+
+@app.get("/todos/export")                        # CSV로 내보내기 — 본인 것만, 휴지통 제외
+def export_todos(user: sqlite3.Row = Depends(get_current_user)) -> StreamingResponse:
+    todos = get_todos(user=user)
+    buffer = io.StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=CSV_FIELDS)
+    writer.writeheader()
+    for todo in todos:
+        writer.writerow({
+            "title": todo.title,
+            "description": todo.description,
+            "completed": "true" if todo.completed else "false",
+            "priority": todo.priority,
+            "due_date": todo.due_date.isoformat() if todo.due_date else "",
+        })
+    return StreamingResponse(
+        iter([buffer.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": "attachment; filename=todos.csv"},
+    )
+
+
+@app.post("/todos/import", status_code=201)      # CSV 가져오기 — 유효한 행만 추가, 기존 항목은 그대로 둠
+async def import_todos(file: UploadFile = File(...), user: sqlite3.Row = Depends(get_current_user)) -> dict:
+    content = (await file.read()).decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(content))
+    added = 0
+    skipped = 0
+    with get_db() as conn:
+        for row in reader:
+            completed_raw = str(row.get("completed") or "").strip().lower()
+            due_date_raw = (row.get("due_date") or "").strip()
+            try:
+                payload = TodoIn(
+                    title=row.get("title") or "",
+                    description=row.get("description") or "",
+                    completed=completed_raw in ("1", "true", "yes"),
+                    priority=(row.get("priority") or "normal").strip().lower(),
+                    due_date=due_date_raw or None,
+                )
+            except ValidationError:
+                skipped += 1
+                continue
+            conn.execute(
+                "INSERT INTO todos (user_id, title, description, completed, priority, due_date) VALUES (?, ?, ?, ?, ?, ?)",
+                (
+                    user["id"], payload.title, payload.description, int(payload.completed),
+                    payload.priority, payload.due_date.isoformat() if payload.due_date else None,
+                ),
+            )
+            added += 1
+    return {"added": added, "skipped": skipped}
 
 
 @app.get("/stats")                               # 연속 완료 스트릭 조회 (본인 것만)

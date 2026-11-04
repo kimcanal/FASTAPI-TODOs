@@ -185,6 +185,61 @@ def test_trash_older_than_retention_period_is_purged_on_startup(client):
     assert trash_ids == {recent["id"]}
 
 
+def test_export_returns_csv_of_own_todos_only(client):
+    register(client, "alice", "secret1")
+    client.post("/todos", json={"title": "우유 사기", "priority": "high", "due_date": "2026-12-25"})
+    deleted = client.post("/todos", json={"title": "휴지통행"}).json()
+    client.delete(f"/todos/{deleted['id']}")
+
+    bob = TestClient(main.app)
+    register(bob, "bob", "secret2")
+    bob.post("/todos", json={"title": "bob's todo"})
+
+    response = client.get("/todos/export")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    body = response.text
+    assert "우유 사기" in body
+    assert "high" in body
+    assert "2026-12-25" in body
+    assert "휴지통행" not in body   # 삭제(휴지통)된 항목은 내보내지 않음
+    assert "bob's todo" not in body  # 본인 것만
+
+
+def test_import_adds_valid_rows_and_skips_invalid_ones(client):
+    register(client, "alice", "secret1")
+    csv_body = (
+        "title,description,completed,priority,due_date\n"
+        "할 일 1,설명1,true,high,2026-12-31\n"
+        "할 일 2,,false,normal,\n"
+        ",빈 제목은 거부됨,false,normal,\n"
+    )
+    files = {"file": ("todos.csv", csv_body, "text/csv")}
+    response = client.post("/todos/import", files=files)
+
+    assert response.status_code == 201
+    assert response.json() == {"added": 2, "skipped": 1}
+
+    todos = client.get("/todos").json()
+    assert len(todos) == 2
+    first = next(t for t in todos if t["title"] == "할 일 1")
+    assert first["completed"] is True
+    assert first["priority"] == "high"
+    assert first["due_date"] == "2026-12-31"
+
+
+def test_import_does_not_touch_existing_todos(client):
+    register(client, "alice", "secret1")
+    existing = client.post("/todos", json={"title": "기존 할 일"}).json()
+    files = {"file": ("todos.csv", "title,description,completed,priority,due_date\n새 할 일,,false,normal,\n", "text/csv")}
+    client.post("/todos/import", files=files)
+
+    todos = client.get("/todos").json()
+    assert existing in todos
+    assert any(t["title"] == "새 할 일" for t in todos)
+    assert len(todos) == 2
+
+
 def test_blank_title_is_rejected(client):
     register(client, "alice", "secret1")
     response = client.post("/todos", json={"title": "   "})

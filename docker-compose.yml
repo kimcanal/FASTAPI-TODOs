@@ -16,14 +16,20 @@ services:
       - no-new-privileges:true    # 컨테이너 안에서 권한 상승 차단
     cap_drop:
       - ALL                       # 불필요한 커널 권한 모두 제거
+    networks:
+      - loadtest-net
 
   sonarqube:
-    image: sonarqube:lts-community
+    # latest 태그는 재현이 안 되고, 어느 날 메이저 업그레이드가 끼어들어 DB 마이그레이션이 터진다.
+    # Community Build 최신 버전으로 고정 (2026-11 기준)
+    image: sonarqube:26.10.0.133078-community
     container_name: sonarqube
     depends_on:
       - sonar-db
     ports:
-      - "9000:9000"
+      # 0.0.0.0 바인딩 금지 — 인증 없는 관리 UI가 전 인터넷에 열린다.
+      # 접속은 SSH 터널(ssh -L 9000:127.0.0.1:9000 ...) 또는 Tailscale로.
+      - "127.0.0.1:9000:9000"
     environment:
       SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
       SONAR_JDBC_USERNAME: sonar
@@ -33,6 +39,8 @@ services:
       - sonarqube-extensions:/opt/sonarqube/extensions
       - sonarqube-logs:/opt/sonarqube/logs
     restart: unless-stopped
+    networks:
+      - loadtest-net
 
   sonar-db:
     image: postgres:16-alpine
@@ -44,9 +52,11 @@ services:
     volumes:
       - sonar-db-data:/var/lib/postgresql/data
     restart: unless-stopped
+    networks:
+      - loadtest-net
 
   prometheus:
-    image: prom/prometheus:v3.15.0              # latest 대신 버전 고정
+    image: prom/prometheus:v3.15.1              # 최신 안정 버전 고정
     container_name: prometheus
     read_only: true                             # 컨테이너 파일시스템 읽기 전용 (데이터 볼륨만 쓰기 가능)
     security_opt:
@@ -62,17 +72,26 @@ services:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro   # 설정 파일은 읽기 전용(:ro)
       - prometheus-data:/prometheus             # 수집한 메트릭 저장 (컨테이너를 다시 만들어도 유지)
     restart: unless-stopped
+    networks:
+      - loadtest-net
 
   grafana:
-    image: grafana/grafana:13.2.4               # latest 대신 버전 고정 (2026-10-13 보안 패치 버전)
+    image: grafana/grafana:13.3.0               # 최신 안정 버전 고정
     container_name: grafana
     security_opt:
       - no-new-privileges:true
     cap_drop:
       - ALL
     ports:
-      - "3000:3000"
+      - "127.0.0.1:3000:3000"                   # 외부 노출 금지 — SSH 터널/Tailscale로 접속
     environment:
+      # admin/admin 을 평문으로 박아두면 포트가 열리는 순간 바로 관리자 계정이 털린다.
+      # 비밀번호는 git에 올라가지 않는 .env 파일에 둔다 (.gitignore에 .env 추가 필수, .env.example 참고).
+      # 이미 초기화된 Grafana 볼륨에는 이 값이 적용되지 않는다 — 최초 1회 기동 시에만 사용되는 값이고,
+      # 이미 다른 비밀번호로 바꿔둔 상태라면 그 비밀번호가 계속 유효하다.
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:?GRAFANA_ADMIN_PASSWORD를 .env에 설정하세요}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_AUTH_ANONYMOUS_ENABLED: "false"
       GF_AUTH_BASIC_PASSWORD_POLICY: "true"       # 비밀번호 12자 이상 + 대·소문자·숫자·특수문자 필수
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
@@ -80,6 +99,8 @@ services:
     volumes:
       - grafana-data:/var/lib/grafana
     restart: unless-stopped
+    networks:
+      - loadtest-net
 
   node-exporter:
     image: prom/node-exporter:v1.12.1           # latest 대신 버전 고정
@@ -89,8 +110,12 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    # ports 없음: Prometheus가 내부 네트워크(node-exporter:9100)로 수집하므로 외부 공개 불필요
+    # ports 없음: Prometheus가 내부 네트워크(node-exporter:9100)로 수집하므로 외부 공개 불필요.
+    # (node-exporter는 인증이 전혀 없이 호스트의 CPU/메모리/네트워크/마운트 정보를 그대로 노출하므로
+    #  외부에 열어두면 정찰·증폭 공격의 표적이 된다)
     restart: unless-stopped
+    networks:
+      - loadtest-net
 
   cadvisor:
     image: ghcr.io/google/cadvisor:v0.60.6      # v0.53.0부터 이미지 위치가 ghcr.io로 변경
@@ -106,6 +131,59 @@ services:
       - /dev/disk/:/dev/disk:ro
     # ports 없음: 8080은 Jenkins 포트와 겹치고, Prometheus가 내부 네트워크(cadvisor:8080)로 수집
     restart: unless-stopped
+    networks:
+      - loadtest-net
+
+  influxdb:
+    image: influxdb:1.8                         # JMeter 내장 InfluxdbBackendListenerClient가 쓰는 v1 라인 프로토콜 API
+    container_name: ${INFLUXDB_CONTAINER_NAME:-influxdb}   # 공용(팀) 서버에서는 이름이 겹치지 않게 지정
+    environment:
+      INFLUXDB_DB: jmeter
+      INFLUXDB_HTTP_AUTH_ENABLED: "false"        # 외부 미공개 + 내부망 전용이라 JMeter/Grafana만 접근
+    volumes:
+      - influxdb-data:/var/lib/influxdb
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    # ports 없음: Grafana/JMeter가 내부 네트워크(influxdb:8086)로만 접근
+    restart: unless-stopped
+    networks:
+      - loadtest-net
+
+  jmeter:
+    build:
+      context: ./jmeter
+      dockerfile: Dockerfile
+    container_name: ${JMETER_CONTAINER_NAME:-jmeter}   # 공용(팀) 서버에서는 이름이 겹치지 않게 지정
+    depends_on:
+      fastapi-app:
+        condition: service_healthy
+      influxdb:
+        condition: service_healthy
+    volumes:
+      - ./jmeter:/jmeter
+    command:
+      - jmeter
+      - -n
+      - -t
+      - /jmeter/fastapi_test_plan.jmx
+      - -l
+      - /jmeter/results.jtl
+      - -JTARGET_HOST=fastapi-app
+      - -JTARGET_PORT=8000
+      - -JINFLUXDB_URL=http://influxdb:8086/write?db=jmeter
+      - -Jjmeter.save.saveservice.output_format=csv
+      - -e
+      - -o
+      - /jmeter/report
+    networks:
+      - loadtest-net
+
+networks:
+  loadtest-net:
+    driver: bridge
 
 volumes:
   todo-data:
@@ -115,3 +193,4 @@ volumes:
   sonar-db-data:
   prometheus-data:
   grafana-data:
+  influxdb-data:

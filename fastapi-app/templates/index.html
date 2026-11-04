@@ -255,6 +255,21 @@
         #trash-header p { margin: 0; font-size: .8rem; color: var(--muted); flex: 1 1 14rem; }
         #trash-empty { color: var(--muted); font-size: .9rem; padding: .5rem .25rem; }
         #trash-list li span.trash-meta { flex: none; font-size: .78rem; color: var(--muted); }
+        #csv-tools {
+            display: flex;
+            gap: .5rem;
+            margin-bottom: .75rem;
+        }
+        #csv-tools button, #csv-tools label {
+            background: transparent;
+            border: 2px solid var(--border);
+            color: var(--muted);
+            padding: .35rem .8rem;
+            border-radius: 999px;
+            font-size: .8rem;
+            cursor: var(--cursor-icon);
+        }
+        #csv-tools button:hover, #csv-tools label:hover { background: #fbdceb; }
     </style>
 </head>
 <body>
@@ -289,6 +304,11 @@
                 <option value="priority">우선순위순</option>
             </select>
             <span id="count"></span>
+        </div>
+        <div id="csv-tools">
+            <button type="button" id="export-btn">⬇ CSV 내보내기</button>
+            <label id="import-label" for="import-input">⬆ CSV 가져오기</label>
+            <input type="file" id="import-input" accept=".csv,text/csv" hidden>
         </div>
         <ul id="todo-list"></ul>
     </div>
@@ -486,6 +506,14 @@
           undoTimer = setTimeout(hideUndoToast, UNDO_SECONDS * 1000);
         }
 
+        function showMessageToast(text, seconds = 4) {
+          clearTimeout(undoTimer);
+          const toast = $("undo-toast");
+          toast.replaceChildren(Object.assign(document.createElement("span"), { textContent: text }));
+          toast.hidden = false;
+          undoTimer = setTimeout(hideUndoToast, seconds * 1000);
+        }
+
         // 휴지통 패널(열려 있으면)과 본 목록을 함께 갱신하며 할 일을 복원한다 (복원 시 항상 미완료로 돌아옴)
         function restoreTodo(id) {
           return run("복원", async () => {
@@ -536,6 +564,25 @@
 
         $("trash-toggle-btn").onclick = () => { $("trash-card").hidden = false; loadTrash(); };
         $("trash-close-btn").onclick = () => { $("trash-card").hidden = true; };
+
+        $("export-btn").onclick = () => { window.location.href = "/todos/export"; };
+
+        $("import-input").onchange = (event) => {
+          const file = event.target.files[0];
+          event.target.value = "";   // 같은 파일을 다시 선택해도 change 이벤트가 또 일어나도록
+          if (!file) return;
+          run("CSV 가져오기", async () => {
+            const formData = new FormData();
+            formData.append("file", file);
+            const res = await fetch("/todos/import", { method: "POST", body: formData });
+            if (res.status === 401) { location.href = "/login"; throw new Error("로그인이 필요합니다"); }
+            if (!res.ok) throw new Error(`${res.status} ${await res.text()}`);
+            const result = await res.json();
+            await load();
+            await loadStats();
+            showMessageToast(`CSV에서 ${result.added}개 추가했어요 (건너뜀 ${result.skipped}개)`);
+          });
+        };
 
         $("todo-form").onsubmit = (event) => {
           event.preventDefault();

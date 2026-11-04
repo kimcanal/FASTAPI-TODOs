@@ -5,3 +5,4 @@ markdown-it-py>=4.0.0
 itsdangerous>=2.2.0
 prometheus-fastapi-instrumentator>=8.1.0   # Starlette 1.x 지원 버전 (7.x 이하는 설치 충돌)
 prometheus-client>=0.26.0
+python-multipart>=0.0.20   # CSV 업로드(UploadFile) 처리에 필요

@@ -86,10 +86,50 @@ else
 fi
 
 cd "$REPO_DIR/$APP_DIR"
+# jmeter 컨테이너(uid 1000)가 호스트 바인드 마운트에 결과를 쓸 수 있도록.
+# 이 서버 계정의 uid가 1000이 아니라서 (AD 계정) 기본 권한(755)으로는 쓰기가 막힌다.
+mkdir -p jmeter && chmod 777 jmeter
+[ -f .env ] || echo "GRAFANA_ADMIN_PASSWORD=change-me-12chars-Aa1!" > .env
 docker compose up -d --build --remove-orphans
 docker compose ps
 ENDSSH
 '''
+                }
+            }
+        }
+
+        // JMeter는 compose 의존성(healthy)이 갖춰지는 대로 백그라운드로 시작되므로,
+        // Deploy 단계가 끝난 시점엔 아직 실행 중일 수 있다 — 끝날 때까지 기다렸다가 리포트를 가져온다.
+        stage('Wait for JMeter & Collect Report') {
+            steps {
+                sshagent(credentials: ['deploy-key']) {
+                    sh '''
+ssh ${REMOTE_USER}@${REMOTE_HOST} "REMOTE_PATH='${REMOTE_PATH}' REPO_DIR='${REPO_DIR}' APP_DIR='${APP_DIR}' bash -se" <<'ENDSSH'
+set -euo pipefail
+cd "$REMOTE_PATH/$REPO_DIR/$APP_DIR"
+docker wait jmeter >/dev/null
+ENDSSH
+
+rm -rf jmeter-report results.jtl
+mkdir -p jmeter-report
+scp -o StrictHostKeyChecking=yes -r \
+  "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}/${REPO_DIR}/${APP_DIR}/jmeter/report/." jmeter-report/ || true
+scp -o StrictHostKeyChecking=yes \
+  "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_PATH}/${REPO_DIR}/${APP_DIR}/jmeter/results.jtl" . || true
+'''
+                }
+            }
+            post {
+                always {
+                    publishHTML(target: [
+                        reportName           : 'JMeter HTML Report',
+                        reportDir            : 'jmeter-report',
+                        reportFiles          : 'index.html',
+                        keepAll              : true,
+                        alwaysLinkToLastBuild: true,
+                        allowMissing         : true
+                    ])
+                    archiveArtifacts artifacts: 'results.jtl', allowEmptyArchive: true
                 }
             }
         }
