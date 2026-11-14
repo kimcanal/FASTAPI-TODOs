@@ -157,6 +157,46 @@ services:
     networks:
       - loadtest-net
 
+  loki:                                          # 로그 저장소 (#9 추가)
+    image: grafana/loki:3.7.9                   # 최신 안정 버전 고정 (2026-11 기준)
+    container_name: loki
+    command: -config.file=/etc/loki/local-config.yaml   # 이미지 기본 설정 (TSDB + schema v13)
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:3100:3100"                   # 외부 노출 금지 (이 설정의 Loki는 인증이 없음)
+    volumes:
+      - loki-data:/loki                         # 수집된 로그 보존 (컨테이너를 다시 만들어도 유지)
+    restart: unless-stopped
+    networks:
+      - loadtest-net
+
+  alloy:                                         # 로그 수집기, Promtail 대체 — EOL(2026-03-02) (#9 추가)
+    image: grafana/alloy:v1.21.3                # 최신 안정 버전 고정 (Alloy 태그는 앞에 v가 붙음)
+    container_name: alloy
+    # cap_drop: ALL 을 못 씀 — 이미지에 이미 /var/lib/alloy/data가 uid 473 소유로 구워져 있어서,
+    # CAP_CHOWN/CAP_DAC_OVERRIDE가 없으면 그 경로에 쓰기 자체가 거부된다 (mkdir ... permission denied)
+    security_opt:
+      - no-new-privileges:true
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - /etc/alloy/config.alloy
+    ports:
+      - "127.0.0.1:12345:12345"                 # Alloy UI. 외부 노출 금지 (로그인 기능 없음)
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro   # 컨테이너 목록·로그를 읽는 통로
+      - alloy-data:/var/lib/alloy/data          # 어디까지 읽었는지(positions) 저장
+    depends_on:
+      - loki
+    restart: unless-stopped
+    networks:
+      - loadtest-net
+
   jmeter:
     # ./jmeter/Dockerfile로 직접 빌드하지 않고 미리 빌드해 올려둔 이미지를 pull한다 — 일부
     # 네트워크(팀 서버)에서 Dockerfile 안의 archive.apache.org 다운로드가 느리거나 막히기 때문.
@@ -200,3 +240,5 @@ volumes:
   prometheus-data:
   grafana-data:
   influxdb-data:
+  loki-data:
+  alloy-data:

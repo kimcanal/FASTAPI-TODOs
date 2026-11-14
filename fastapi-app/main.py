@@ -3,10 +3,13 @@ import csv
 import hashlib
 import hmac
 import io
+import logging
 import os
 import secrets
 import sqlite3
 import subprocess
+import sys
+import time
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
@@ -145,6 +148,29 @@ BUILD_NUMBER = os.environ.get("BUILD_NUMBER", "local")   # Jenkins가 자동으�
 app = FastAPI(title="To-Do List API")
 app.add_middleware(SessionMiddleware, secret_key=_get_or_create_session_secret(), max_age=14 * 24 * 3600)
 Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)
+
+# 액세스 로그를 stdout으로 출력 (#9) — Docker가 컨테이너 로그로 저장하고 Alloy가 Loki로 전송한다
+access_logger = logging.getLogger("custom.access")
+access_logger.setLevel(logging.INFO)
+access_logger.addHandler(logging.StreamHandler(sys.stdout))
+access_logger.propagate = False                  # 상위 로거로 전파되어 두 번 찍히는 것을 방지
+
+# uvicorn 기본 액세스 로그는 끈다 — 켜 두면 요청 1번에 로그가 2줄씩 남아 Loki 집계가 2배가 됨
+logging.getLogger("uvicorn.access").disabled = True
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - start
+    client = request.client.host if request.client else "-"
+    # 형식: IP - "METHOD PATH HTTP/1.1" 상태코드 응답시간 → Grafana LogQL pattern이 이 형식을 파싱
+    access_logger.info(
+        f'{client} - "{request.method} {request.url.path} HTTP/1.1" '
+        f'{response.status_code} {duration:.3f}s'
+    )
+    return response
 
 
 class TodoIn(BaseModel):                         # 클라이언트가 보내는 데이터 (id 없음)

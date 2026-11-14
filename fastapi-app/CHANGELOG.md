@@ -3,6 +3,18 @@
 이 프로젝트의 주요 변경 사항을 기록합니다.
 형식은 [Keep a Changelog](https://keepachangelog.com/ko/1.1.0/)를 따릅니다.
 
+## [8.0.0] - 2026-11-14
+
+### Added
+
+- 로그 저장소 **Loki**(`grafana/loki:3.7.9`)와 로그 수집기 **Grafana Alloy**(`grafana/alloy:v1.21.3`)를 `docker-compose.yml`에 추가 — Alloy가 Docker 소켓으로 `fastapi-app` 컨테이너의 stdout 로그를 tail해 Loki로 push (`alloy/config.alloy`). Promtail은 2026-03-02 EOL이라 대신 Alloy 사용
+- `main.py`에 액세스 로그 미들웨어 추가 — 요청마다 `IP - "METHOD PATH HTTP/1.1" 상태코드 응답시간` 형식으로 stdout에 기록하고, 중복 집계를 막기 위해 uvicorn 기본 액세스 로그는 비활성화
+- Grafana에 Loki 데이터소스 + Path별 요청 횟수 집계 대시보드(LogQL `pattern`/`count_over_time`) 추가
+
+### Changed
+
+- Loki(3100)·Alloy(12345)도 기존 Prometheus/Grafana와 동일하게 `127.0.0.1`에만 바인딩 (둘 다 인증 기능이 없음)
+
 ## [7.0.0] - 2026-11-04
 
 ### Added
