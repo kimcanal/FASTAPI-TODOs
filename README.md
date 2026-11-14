@@ -31,6 +31,7 @@
 - **Docker Hub** — 배포 이미지 저장소 (`lucatonikroos/fastapi-app`)
 - **Jenkins** — CI/CD 파이프라인, 테스트 실패 시 배포 차단, 커버리지/테스트 리포트 아티팩트 보관, 빌드 실패 시 이메일 알림
 - **SonarQube** (Community Edition) — 정적분석/Quality Gate, pytest의 `coverage.xml`을 그대로 스캔
+- **Grafana Loki + Alloy** — 컨테이너 stdout 액세스 로그를 수집·저장(`application="fastapi"` 라벨), LogQL로 Path별 요청 횟수 집계
 
 ## 프로젝트 구조
 
@@ -52,7 +53,9 @@ fastapi-app/
     ├── test_main.py                   # 단위 테스트 (TestClient, 100% 커버리지)
     └── test_integration_deployed.py   # 배포 환경 API 통합 테스트 (실제 HTTP, `-m integration`)
 ui-tests/                     # Playwright UI 테스트 (배포된 앱을 브라우저로 조작)
-docker-compose.yml           # compose 배포 설정 (포트·컨테이너 이름·볼륨, SonarQube/DB 포함)
+alloy/
+└── config.alloy             # Alloy가 fastapi-app 컨테이너 로그를 찾아 Loki로 push하는 설정
+docker-compose.yml           # compose 배포 설정 (포트·컨테이너 이름·볼륨, SonarQube/DB/Loki/Alloy 포함)
 sonar-project.properties     # SonarQube 스캔 설정 (소스·테스트 경로, 커버리지 리포트 경로)
 jenkins/                     # Jenkins 배포 파이프라인 (아래 '배포' 참고)
 Jenkinsfile                  # CI 파이프라인 (Install → Test → Deploy, uvicorn 직접 실행)
