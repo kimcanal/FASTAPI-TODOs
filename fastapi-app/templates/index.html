@@ -107,6 +107,15 @@
             flex: none;
         }
         .badge.overdue { border-color: var(--accent); color: var(--accent); font-weight: 600; }
+        .todo-title { font-weight: 500; }
+        .todo-desc {
+            flex-basis: 100%;
+            color: var(--ink);              /* 연한 회색(--muted)은 대비가 낮아 읽기 불편해서 본문과 같은 잉크색으로 */
+            opacity: .75;                   /* 대신 제목보다 살짝 흐리게만 — 구분은 되지만 읽는 덴 지장 없게 */
+            font-size: .9rem;
+            margin-left: calc(.75rem + 1.1rem);   /* 체크박스 폭만큼 들여써서 제목 밑에 달린 설명처럼 보이게 */
+        }
+        .todo-desc.done { opacity: 1; }     /* .done이 이미 색을 muted로 바꾸므로 흐림 효과는 끔 */
         button {
             border: 1px solid var(--rule);
             border-radius: 6px;
@@ -126,10 +135,19 @@
             font-weight: 600;
         }
         form button[type="submit"]:hover { background: #343f36; }
-        #error {
+        #error, .field-error {
             color: var(--accent);
             background: #fbeceb;
             border: 1px solid var(--accent);
+            border-radius: 6px;
+            padding: .6rem .75rem;
+            margin: 0 0 1rem;
+            font-size: .875rem;
+        }
+        .field-success {
+            color: var(--done);
+            background: var(--done-bg);
+            border: 1px solid var(--done);
             border-radius: 6px;
             padding: .6rem .75rem;
             margin: 0 0 1rem;
@@ -168,10 +186,22 @@
             align-items: center;
             flex-wrap: wrap;
             gap: .5rem .7rem;
-            padding: .65rem .25rem;
+            padding: .65rem .25rem .65rem .5rem;
             border-bottom: 1px solid var(--rule);
+            border-left: 3px solid transparent;   /* 중요 항목일 때만 priority-high로 색이 채워짐 */
         }
         li:last-child { border-bottom: none; }
+        li.priority-high { border-left-color: var(--accent); }
+        li.todo-group-heading {
+            display: block;
+            border-left: none;
+            border-bottom: none;
+            padding: .9rem .25rem .3rem;
+            font-family: "Gowun Batang", serif;
+            font-size: .95rem;
+            color: var(--muted);
+        }
+        li.todo-group-heading:first-child { padding-top: 0; }
         li input[type="checkbox"] {
             width: 1.1rem;
             height: 1.1rem;
@@ -271,27 +301,13 @@
             cursor: pointer;
         }
         #csv-tools button:hover, #csv-tools label:hover { background: var(--paper); }
+        #account-card { margin-top: 1rem; }
+        #account-card h2 { font-family: "Gowun Batang", serif; font-size: 1.05rem; margin: 0 0 1rem; }
+        #password-form { flex-direction: column; }
+        #password-form input { width: 100%; }
         #friends-card { margin-top: 1rem; }
-        #my-code-row {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: .5rem;
-            margin-bottom: 1rem;
-            padding-bottom: 1rem;
-            border-bottom: 1px solid var(--rule);
-        }
-        #my-code-row p { margin: 0; font-size: .85rem; color: var(--muted); flex: 1 1 10rem; }
-        #my-code {
-            font-weight: 700;
-            letter-spacing: .1rem;
-            background: var(--paper);
-            border: 1px solid var(--rule);
-            padding: .3rem .6rem;
-            border-radius: 6px;
-        }
+        #add-friend-intro { margin: 0 0 .75rem; font-size: .85rem; color: var(--muted); }
         #add-friend-form { margin-bottom: 1rem; }
-        #add-friend-form input { text-transform: uppercase; }
         #friend-list li span.friend-name { font-weight: 600; }
         #friend-todos-header {
             display: flex;
@@ -340,6 +356,7 @@
         <span id="username-info"></span>
         <button type="button" id="friends-toggle-btn">친구</button>
         <button type="button" id="trash-toggle-btn">휴지통</button>
+        <button type="button" id="account-toggle-btn">계정</button>
         <button type="button" id="logout-btn">로그아웃</button>
     </div>
     <h1>할 일 목록</h1>
@@ -361,11 +378,6 @@
             <button data-filter="active">진행중</button>
             <button data-filter="completed">완료</button>
             <input type="text" id="search" placeholder="검색">
-            <select id="sort">
-                <option value="">정렬: 기본</option>
-                <option value="due_date">마감일순</option>
-                <option value="priority">우선순위순</option>
-            </select>
             <span id="count"></span>
         </div>
         <div id="csv-tools">
@@ -386,16 +398,13 @@
     </div>
     <div class="card" id="friends-card" hidden>
         <div id="friend-list-view">
-            <div id="my-code-row">
-                <p>내 친구 코드를 알려주면 친구가 나를 추가할 수 있어요.</p>
-                <span id="my-code"></span>
-            </div>
+            <p id="add-friend-intro">친구의 학번을 입력하면 추가돼요.</p>
             <form id="add-friend-form">
-                <input type="text" id="friend-code-input" placeholder="친구 코드 입력 (예: AB12CD)" maxlength="6" required>
+                <input type="text" id="friend-username-input" placeholder="친구 학번 입력" inputmode="numeric" pattern="[0-9]*" required>
                 <button type="submit">추가</button>
             </form>
-            <p id="friend-error" role="alert" hidden></p>
-            <p id="friend-empty" hidden>아직 친구가 없어요. 친구 코드를 받아서 추가해보세요.</p>
+            <p id="friend-error" class="field-error" role="alert" hidden></p>
+            <p id="friend-empty" hidden>아직 친구가 없어요. 학번으로 추가해보세요.</p>
             <ul id="friend-list"></ul>
         </div>
         <div id="friend-todos-view" hidden>
@@ -405,6 +414,17 @@
             </div>
             <ul id="friend-todo-list"></ul>
         </div>
+    </div>
+    <div class="card" id="account-card" hidden>
+        <h2>비밀번호 변경</h2>
+        <p id="password-error" class="field-error" role="alert" hidden></p>
+        <p id="password-success" class="field-success" hidden>비밀번호를 변경했습니다.</p>
+        <form id="password-form">
+            <input type="password" id="old-password" placeholder="현재 비밀번호" inputmode="numeric" pattern="[0-9]*" required>
+            <input type="password" id="new-password" placeholder="새 비밀번호 (숫자만)" inputmode="numeric" pattern="[0-9]*" required>
+            <input type="password" id="new-password-confirm" placeholder="새 비밀번호 확인" inputmode="numeric" pattern="[0-9]*" required>
+            <button type="submit">변경</button>
+        </form>
     </div>
     <div id="undo-toast" hidden></div>
     <footer>
@@ -418,7 +438,6 @@
         let allTodos = [];
         let filter = "all";
         let search = "";
-        let sortMode = "";
         let editingId = null;
 
         const PRIORITY_LABEL = { high: "중요", normal: "보통" };
@@ -427,6 +446,36 @@
           if (!dueDate) return null;
           const isOverdue = !completed && dueDate < new Date().toISOString().slice(0, 10);
           return { text: `${dueDate}${isOverdue ? " (지남)" : ""}`, overdue: isOverdue };
+        }
+
+        // 마감일을 매번 직접 고르지 않아도 되게, 추가 폼의 기본값을 오늘 날짜로 채워둔다
+        function setDefaultDueDate() {
+          $("due-date").value = new Date().toISOString().slice(0, 10);
+        }
+
+        // 제목/설명을 한 문자열로 이어붙이지 않고 각각 별도 요소로 렌더링한다.
+        // 우선순위는 텍스트 배지 대신, 할 일 목록(Todoist/TickTick 등)에서 흔한
+        // "행 왼쪽의 색상 띠"로 표시한다 — 매 줄에 "보통"이라고 반복해서 적지 않아도 되고,
+        // 중요한 항목만 한눈에 스캔하기 쉽다 (markTodoLi에서 li에 클래스를 붙임)
+        function markTodoLi(li, todo) {
+          li.classList.toggle("priority-high", todo.priority === "high");
+        }
+
+        function todoContentNodes(todo) {
+          const doneClass = todo.completed ? " done" : "";
+          const nodes = [
+            Object.assign(document.createElement("span"), {
+              textContent: todo.title,
+              className: `todo-title${doneClass}`,
+            }),
+          ];
+          if (todo.description) {
+            nodes.push(Object.assign(document.createElement("span"), {
+              textContent: todo.description,
+              className: `todo-desc${doneClass}`,
+            }));
+          }
+          return nodes;
         }
 
         // 모든 요청을 한 곳에서 처리하고, 실패는 조용히 넘기지 않는다
@@ -473,74 +522,99 @@
         }
 
         $("search").oninput = (e) => { search = e.target.value; render(); };
-        $("sort").onchange = (e) => { sortMode = e.target.value; render(); };
+
+        // 정렬 옵션을 따로 두지 않고, 중요가 항상 위 / 각 그룹 안에서는 마감일이 빠른 순으로 고정한다
+        function byDueDateAsc(a, b) {
+          return (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999");
+        }
+
+        function buildEditingLi(todo) {
+          const li = document.createElement("li");
+          li.className = "editing";
+          const titleInput = Object.assign(document.createElement("input"), {
+            type: "text", value: todo.title, className: "edit-title",
+          });
+          const descInput = Object.assign(document.createElement("input"), {
+            type: "text", value: todo.description, className: "edit-description",
+          });
+          const priorityInput = Object.assign(document.createElement("select"), { className: "edit-priority" });
+          for (const [value, label] of Object.entries(PRIORITY_LABEL)) {
+            priorityInput.append(new Option(label, value, false, todo.priority === value));
+          }
+          const dueDateInput = Object.assign(document.createElement("input"), {
+            type: "date", value: todo.due_date ?? "", className: "edit-due-date",
+          });
+          const onKey = (e) => {
+            if (e.key === "Enter") submitEdit(todo, li);
+            if (e.key === "Escape") cancelEdit();
+          };
+          titleInput.onkeydown = descInput.onkeydown = onKey;
+          li.append(
+            titleInput, descInput, priorityInput, dueDateInput,
+            button("저장", () => submitEdit(todo, li)), button("취소", cancelEdit),
+          );
+          return li;
+        }
+
+        function buildTodoLi(todo) {
+          if (todo.id === editingId) return buildEditingLi(todo);
+
+          const li = document.createElement("li");
+          const check = Object.assign(document.createElement("input"), {
+            type: "checkbox",
+            checked: todo.completed,
+            onchange: () => save(todo.id, { ...todo, completed: check.checked }),
+          });
+          markTodoLi(li, todo);
+          li.append(check, ...todoContentNodes(todo));
+          const due = formatDueDate(todo.due_date, todo.completed);
+          if (due) {
+            li.append(Object.assign(document.createElement("span"), {
+              textContent: due.text,
+              className: due.overdue ? "badge overdue" : "badge",
+            }));
+          }
+          // 친구가 남긴 반응 — 본인은 누를 수 없으니 읽기 전용 배지로만 보여준다
+          for (const [emoji, count] of Object.entries(todo.reaction_counts)) {
+            if (count === 0) continue;
+            li.append(Object.assign(document.createElement("span"), {
+              className: "badge",
+              textContent: `${emoji} ${count}`,
+            }));
+          }
+          li.append(button("수정", () => startEdit(todo.id)), button("삭제", () => remove(todo.id)));
+          return li;
+        }
+
+        function groupHeadingLi(label) {
+          return Object.assign(document.createElement("li"), {
+            textContent: label,
+            className: "todo-group-heading",
+          });
+        }
 
         function render() {
-          let todos = allTodos.filter((todo) => {
+          const todos = allTodos.filter((todo) => {
             if (filter === "active" && todo.completed) return false;
             if (filter === "completed" && !todo.completed) return false;
             const needle = search.trim().toLowerCase();
             if (!needle) return true;
             return todo.title.toLowerCase().includes(needle) || todo.description.toLowerCase().includes(needle);
           });
-          if (sortMode === "due_date") {
-            todos = [...todos].sort((a, b) => (a.due_date ?? "9999").localeCompare(b.due_date ?? "9999"));
-          } else if (sortMode === "priority") {
-            const order = { high: 0, normal: 1 };
-            todos = [...todos].sort((a, b) => order[a.priority] - order[b.priority]);
-          }
           countEl.textContent = `오늘 남은 일들은 ${allTodos.filter((t) => !t.completed).length}개입니다.`;
           celebrateEl.hidden = !(allTodos.length > 0 && allTodos.every((t) => t.completed));
-          listEl.replaceChildren(...todos.map((todo) => {
-            const li = document.createElement("li");
 
-            if (todo.id === editingId) {
-              li.className = "editing";
-              const titleInput = Object.assign(document.createElement("input"), {
-                type: "text", value: todo.title, className: "edit-title",
-              });
-              const descInput = Object.assign(document.createElement("input"), {
-                type: "text", value: todo.description, className: "edit-description",
-              });
-              const priorityInput = Object.assign(document.createElement("select"), { className: "edit-priority" });
-              for (const [value, label] of Object.entries(PRIORITY_LABEL)) {
-                priorityInput.append(new Option(label, value, false, todo.priority === value));
-              }
-              const dueDateInput = Object.assign(document.createElement("input"), {
-                type: "date", value: todo.due_date ?? "", className: "edit-due-date",
-              });
-              const onKey = (e) => {
-                if (e.key === "Enter") submitEdit(todo, li);
-                if (e.key === "Escape") cancelEdit();
-              };
-              titleInput.onkeydown = descInput.onkeydown = onKey;
-              li.append(
-                titleInput, descInput, priorityInput, dueDateInput,
-                button("저장", () => submitEdit(todo, li)), button("취소", cancelEdit),
-              );
-              return li;
-            }
-
-            const check = Object.assign(document.createElement("input"), {
-              type: "checkbox",
-              checked: todo.completed,
-              onchange: () => save(todo.id, { ...todo, completed: check.checked }),
-            });
-            const text = Object.assign(document.createElement("span"), {
-              textContent: `${PRIORITY_LABEL[todo.priority]} ${todo.title} — ${todo.description}`,
-              className: todo.completed ? "done" : "",
-            });
-            li.append(check, text);
-            const due = formatDueDate(todo.due_date, todo.completed);
-            if (due) {
-              li.append(Object.assign(document.createElement("span"), {
-                textContent: due.text,
-                className: due.overdue ? "badge overdue" : "badge",
-              }));
-            }
-            li.append(button("수정", () => startEdit(todo.id)), button("삭제", () => remove(todo.id)));
-            return li;
-          }));
+          const groups = [
+            { label: "중요", todos: todos.filter((t) => t.priority === "high").sort(byDueDateAsc) },
+            { label: "보통", todos: todos.filter((t) => t.priority === "normal").sort(byDueDateAsc) },
+          ];
+          const children = [];
+          for (const group of groups) {
+            if (group.todos.length === 0) continue;
+            children.push(groupHeadingLi(group.label));
+            children.push(...group.todos.map(buildTodoLi));
+          }
+          listEl.replaceChildren(...children);
 
           if (editingId !== null) listEl.querySelector(".edit-title")?.focus();
         }
@@ -635,14 +709,12 @@
           $("trash-empty").hidden = trashedTodos.length > 0;
           $("trash-list").replaceChildren(...trashedTodos.map((todo) => {
             const li = document.createElement("li");
-            const text = Object.assign(document.createElement("span"), {
-              textContent: `${PRIORITY_LABEL[todo.priority]} ${todo.title} — ${todo.description}`,
-            });
             const meta = Object.assign(document.createElement("span"), {
               className: "trash-meta",
               textContent: `${daysLeftInTrash(todo.deleted_at)}일 후 완전 삭제`,
             });
-            li.append(text, meta, button("복원", () => restoreTodo(todo.id)));
+            markTodoLi(li, todo);
+            li.append(...todoContentNodes(todo), meta, button("복원", () => restoreTodo(todo.id)));
             return li;
           }));
         }
@@ -685,6 +757,7 @@
               due_date: $("due-date").value || null,
             });
             event.target.reset();
+            setDefaultDueDate();
             await load();
             await loadStats();
           });
@@ -712,7 +785,6 @@
           try {
             const info = await api("/auth/me");
             $("username-info").textContent = `${info.username}님`;
-            $("my-code").textContent = info.friend_code;
           } catch {
             // api()가 401이면 이미 /login으로 이동시킨다
           }
@@ -780,37 +852,46 @@
           });
         }
 
+        function buildFriendTodoLi(todo) {
+          const li = document.createElement("li");
+          markTodoLi(li, todo);
+          const main = document.createElement("div");
+          main.className = "friend-todo-main";
+          main.append(...todoContentNodes(todo));
+          const due = formatDueDate(todo.due_date, todo.completed);
+          if (due) {
+            main.append(Object.assign(document.createElement("span"), {
+              textContent: due.text,
+              className: due.overdue ? "badge overdue" : "badge",
+            }));
+          }
+          const reactionBar = document.createElement("div");
+          reactionBar.className = "reaction-bar";
+          for (const emoji of REACTION_EMOJI) {
+            const count = todo.reaction_counts[emoji] ?? 0;
+            const btn = button(count ? `${emoji}` : emoji, () => toggleReaction(todo.id, emoji));
+            if (todo.my_reaction === emoji) btn.classList.add("picked");
+            if (count) btn.append(Object.assign(document.createElement("span"), {
+              textContent: count, className: "reaction-count",
+            }));
+            reactionBar.append(btn);
+          }
+          li.append(main, reactionBar);
+          return li;
+        }
+
         function renderFriendTodos(todos) {
-          $("friend-todo-list").replaceChildren(...todos.map((todo) => {
-            const li = document.createElement("li");
-            const main = document.createElement("div");
-            main.className = "friend-todo-main";
-            const text = Object.assign(document.createElement("span"), {
-              textContent: `${PRIORITY_LABEL[todo.priority]} ${todo.title} — ${todo.description}`,
-              className: todo.completed ? "done" : "",
-            });
-            main.append(text);
-            const due = formatDueDate(todo.due_date, todo.completed);
-            if (due) {
-              main.append(Object.assign(document.createElement("span"), {
-                textContent: due.text,
-                className: due.overdue ? "badge overdue" : "badge",
-              }));
-            }
-            const reactionBar = document.createElement("div");
-            reactionBar.className = "reaction-bar";
-            for (const emoji of REACTION_EMOJI) {
-              const count = todo.reaction_counts[emoji] ?? 0;
-              const btn = button(count ? `${emoji}` : emoji, () => toggleReaction(todo.id, emoji));
-              if (todo.my_reaction === emoji) btn.classList.add("picked");
-              if (count) btn.append(Object.assign(document.createElement("span"), {
-                textContent: count, className: "reaction-count",
-              }));
-              reactionBar.append(btn);
-            }
-            li.append(main, reactionBar);
-            return li;
-          }));
+          const groups = [
+            { label: "중요", todos: todos.filter((t) => t.priority === "high").sort(byDueDateAsc) },
+            { label: "보통", todos: todos.filter((t) => t.priority === "normal").sort(byDueDateAsc) },
+          ];
+          const children = [];
+          for (const group of groups) {
+            if (group.todos.length === 0) continue;
+            children.push(groupHeadingLi(group.label));
+            children.push(...group.todos.map(buildFriendTodoLi));
+          }
+          $("friend-todo-list").replaceChildren(...children);
         }
 
         function toggleReaction(todoId, emoji) {
@@ -821,20 +902,20 @@
         }
 
         $("friends-toggle-btn").onclick = () => {
-          $("friends-card").hidden = false;
-          showFriendListView();
-          loadFriends();
+          const show = $("friends-card").hidden;
+          $("friends-card").hidden = !show;
+          if (show) { showFriendListView(); loadFriends(); }
         };
         $("friend-back-btn").onclick = showFriendListView;
 
         $("add-friend-form").onsubmit = (event) => {
           event.preventDefault();
-          const input = $("friend-code-input");
-          const code = input.value.trim();
-          if (!code) return;
+          const input = $("friend-username-input");
+          const username = input.value.trim();
+          if (!username) return;
           (async () => {
             try {
-              await api("/friends", "POST", { friend_code: code });
+              await api("/friends", "POST", { username });
               $("friend-error").hidden = true;
               input.value = "";
               await loadFriends();
@@ -845,6 +926,36 @@
           })();
         };
 
+        // ── 계정 ──
+        $("account-toggle-btn").onclick = () => {
+          $("account-card").hidden = !$("account-card").hidden;
+        };
+
+        $("password-form").onsubmit = (event) => {
+          event.preventDefault();
+          const oldPassword = $("old-password").value;
+          const newPassword = $("new-password").value;
+          const confirmPassword = $("new-password-confirm").value;
+          $("password-error").hidden = true;
+          $("password-success").hidden = true;
+          if (newPassword !== confirmPassword) {
+            $("password-error").textContent = "새 비밀번호가 서로 다릅니다";
+            $("password-error").hidden = false;
+            return;
+          }
+          (async () => {
+            try {
+              await api("/auth/password", "POST", { old_password: oldPassword, new_password: newPassword });
+              event.target.reset();
+              $("password-success").hidden = false;
+            } catch (e) {
+              $("password-error").textContent = `비밀번호 변경 실패: ${e.message}`;
+              $("password-error").hidden = false;
+            }
+          })();
+        };
+
+        setDefaultDueDate();
         load();
         loadVersion();
         loadUser();

@@ -10,8 +10,12 @@ def isolated_db(tmp_path, monkeypatch):
     main.init_db()
 
 
-def register(client: TestClient, username: str = "alice", password: str = "secret1") -> dict:
-    response = client.post("/auth/register", json={"username": username, "password": password})
+ALICE = "20231001"
+BOB = "20231002"
+
+
+def register(client: TestClient, username: str = ALICE) -> dict:
+    response = client.post("/auth/register", json={"username": username})
     assert response.status_code == 201, response.text
     return response.json()
 
@@ -45,47 +49,78 @@ def test_todos_require_login(client):
 
 
 def test_register_creates_session_and_me_reflects_it(client):
-    register(client, "alice", "secret1")
+    register(client)
     response = client.get("/auth/me")
     assert response.status_code == 200
     body = response.json()
-    assert body["username"] == "alice"
-    assert len(body["friend_code"]) == 6
+    assert body["username"] == ALICE
 
 
 def test_duplicate_username_is_rejected(client):
-    register(client, "alice", "secret1")
+    register(client)
     other = TestClient(main.app)
-    response = other.post("/auth/register", json={"username": "alice", "password": "different1"})
+    response = other.post("/auth/register", json={"username": ALICE})
     assert response.status_code == 409
 
 
+def test_register_rejects_non_numeric_username(client):
+    response = client.post("/auth/register", json={"username": "alice"})
+    assert response.status_code == 422
+
+
 def test_login_with_wrong_password_is_rejected(client):
-    register(client, "alice", "secret1")
+    register(client)
     fresh = TestClient(main.app)
-    response = fresh.post("/auth/login", json={"username": "alice", "password": "wrongpass"})
+    response = fresh.post("/auth/login", json={"username": ALICE, "password": "9999"})
     assert response.status_code == 401
 
 
 def test_login_with_correct_password_succeeds(client):
-    register(client, "alice", "secret1")
+    register(client)
     fresh = TestClient(main.app)
-    response = fresh.post("/auth/login", json={"username": "alice", "password": "secret1"})
+    response = fresh.post("/auth/login", json={"username": ALICE, "password": main.DEFAULT_PASSWORD})
     assert response.status_code == 200
-    assert fresh.get("/auth/me").json()["username"] == "alice"
+    assert fresh.get("/auth/me").json()["username"] == ALICE
 
 
 def test_logout_clears_session(client):
-    register(client, "alice", "secret1")
+    register(client)
     client.post("/auth/logout")
     assert client.get("/auth/me").status_code == 401
 
 
+def test_change_password_then_login_requires_new_password(client):
+    register(client)
+    response = client.post("/auth/password", json={"old_password": main.DEFAULT_PASSWORD, "new_password": "1234"})
+    assert response.status_code == 200
+
+    fresh = TestClient(main.app)
+    assert fresh.post("/auth/login", json={"username": ALICE, "password": main.DEFAULT_PASSWORD}).status_code == 401
+    assert fresh.post("/auth/login", json={"username": ALICE, "password": "1234"}).status_code == 200
+
+
+def test_change_password_with_wrong_old_password_is_rejected(client):
+    register(client)
+    response = client.post("/auth/password", json={"old_password": "9999", "new_password": "1234"})
+    assert response.status_code == 400
+
+
+def test_change_password_requires_login(client):
+    response = client.post("/auth/password", json={"old_password": main.DEFAULT_PASSWORD, "new_password": "1234"})
+    assert response.status_code == 401
+
+
+def test_change_password_rejects_non_numeric_new_password(client):
+    register(client)
+    response = client.post("/auth/password", json={"old_password": main.DEFAULT_PASSWORD, "new_password": "abcd"})
+    assert response.status_code == 422
+
+
 def test_todo_crud_roundtrip(client):
-    register(client, "alice", "secret1")
+    register(client)
 
     created = client.post("/todos", json={"title": "우유 사기"}).json()
-    assert client.get("/todos").json() == [created]
+    assert client.get("/todos").json() == [{**created, "reaction_counts": {}}]
 
     updated = client.put(
         f"/todos/{created['id']}",
@@ -93,7 +128,7 @@ def test_todo_crud_roundtrip(client):
     ).json()
     assert updated["completed"] is True
 
-    assert client.get("/todos", params={"completed": "true"}).json() == [updated]
+    assert client.get("/todos", params={"completed": "true"}).json() == [{**updated, "reaction_counts": {}}]
     assert client.get("/todos", params={"completed": "false"}).json() == []
 
     assert client.delete(f"/todos/{created['id']}").status_code == 204
@@ -101,7 +136,7 @@ def test_todo_crud_roundtrip(client):
 
 
 def test_deleted_todo_can_be_restored(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post("/todos", json={"title": "우유 사기"}).json()
 
     assert client.delete(f"/todos/{created['id']}").status_code == 204
@@ -110,27 +145,27 @@ def test_deleted_todo_can_be_restored(client):
     restored = client.post(f"/todos/{created['id']}/restore")
     assert restored.status_code == 200
     assert restored.json() == created
-    assert client.get("/todos").json() == [created]
+    assert client.get("/todos").json() == [{**created, "reaction_counts": {}}]
 
 
 def test_restoring_a_todo_that_was_never_deleted_returns_404(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post("/todos", json={"title": "우유 사기"}).json()
     assert client.post(f"/todos/{created['id']}/restore").status_code == 404
 
 
 def test_restoring_someone_elses_deleted_todo_returns_404(client):
-    register(client, "alice", "secret1")
+    register(client)
     todo = client.post("/todos", json={"title": "alice's secret"}).json()
     client.delete(f"/todos/{todo['id']}")
 
     bob = TestClient(main.app)
-    register(bob, "bob", "secret2")
+    register(bob, BOB)
     assert bob.post(f"/todos/{todo['id']}/restore").status_code == 404
 
 
 def test_restoring_a_completed_todo_marks_it_incomplete(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post("/todos", json={"title": "우유 사기"}).json()
     client.put(f"/todos/{created['id']}", json={"title": "우유 사기", "completed": True})
 
@@ -141,7 +176,7 @@ def test_restoring_a_completed_todo_marks_it_incomplete(client):
 
 
 def test_deleted_todo_appears_in_trash_until_restored(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post("/todos", json={"title": "우유 사기"}).json()
 
     assert client.get("/todos/trash").json() == []
@@ -157,19 +192,19 @@ def test_deleted_todo_appears_in_trash_until_restored(client):
 
 
 def test_trash_is_scoped_to_owner(client):
-    register(client, "alice", "secret1")
+    register(client)
     todo = client.post("/todos", json={"title": "alice's secret"}).json()
     client.delete(f"/todos/{todo['id']}")
 
     bob = TestClient(main.app)
-    register(bob, "bob", "secret2")
+    register(bob, BOB)
     assert bob.get("/todos/trash").json() == []
 
 
 def test_trash_older_than_retention_period_is_purged_on_startup(client):
     from datetime import datetime, timedelta, timezone
 
-    register(client, "alice", "secret1")
+    register(client)
     recent = client.post("/todos", json={"title": "최근 삭제"}).json()
     stale = client.post("/todos", json={"title": "오래된 삭제"}).json()
     client.delete(f"/todos/{recent['id']}")
@@ -188,13 +223,13 @@ def test_trash_older_than_retention_period_is_purged_on_startup(client):
 
 
 def test_export_returns_csv_of_own_todos_only(client):
-    register(client, "alice", "secret1")
+    register(client)
     client.post("/todos", json={"title": "우유 사기", "priority": "high", "due_date": "2026-12-25"})
     deleted = client.post("/todos", json={"title": "휴지통행"}).json()
     client.delete(f"/todos/{deleted['id']}")
 
     bob = TestClient(main.app)
-    register(bob, "bob", "secret2")
+    register(bob, BOB)
     bob.post("/todos", json={"title": "bob's todo"})
 
     response = client.get("/todos/export")
@@ -209,7 +244,7 @@ def test_export_returns_csv_of_own_todos_only(client):
 
 
 def test_import_adds_valid_rows_and_skips_invalid_ones(client):
-    register(client, "alice", "secret1")
+    register(client)
     csv_body = (
         "title,description,completed,priority,due_date\n"
         "할 일 1,설명1,true,high,2026-12-31\n"
@@ -231,19 +266,19 @@ def test_import_adds_valid_rows_and_skips_invalid_ones(client):
 
 
 def test_import_does_not_touch_existing_todos(client):
-    register(client, "alice", "secret1")
+    register(client)
     existing = client.post("/todos", json={"title": "기존 할 일"}).json()
     files = {"file": ("todos.csv", "title,description,completed,priority,due_date\n새 할 일,,false,normal,\n", "text/csv")}
     client.post("/todos/import", files=files)
 
     todos = client.get("/todos").json()
-    assert existing in todos
+    assert {**existing, "reaction_counts": {}} in todos
     assert any(t["title"] == "새 할 일" for t in todos)
     assert len(todos) == 2
 
 
 def test_blank_title_is_rejected(client):
-    register(client, "alice", "secret1")
+    register(client)
     response = client.post("/todos", json={"title": "   "})
     assert response.status_code == 422
 
@@ -255,14 +290,14 @@ def test_root_redirects_to_login_when_logged_out(client):
 
 
 def test_root_serves_app_when_logged_in(client):
-    register(client, "alice", "secret1")
+    register(client)
     response = client.get("/", follow_redirects=False)
     assert response.status_code == 200
     assert "text/html" in response.headers["content-type"]
 
 
 def test_login_page_redirects_to_root_when_already_logged_in(client):
-    register(client, "alice", "secret1")
+    register(client)
     response = client.get("/login", follow_redirects=False)
     assert response.status_code == 307
     assert response.headers["location"] == "/"
@@ -275,7 +310,7 @@ def test_login_page_renders_when_logged_out(client):
 
 
 def test_stale_session_for_deleted_user_is_rejected(client):
-    user = register(client, "alice", "secret1")
+    user = register(client)
     with main.get_db() as conn:
         conn.execute("DELETE FROM users WHERE username = ?", (user["username"],))
 
@@ -323,29 +358,29 @@ def test_get_or_create_session_secret_creates_file_when_missing(tmp_path, monkey
 
 
 def test_users_cannot_see_or_modify_each_others_todos(client):
-    register(client, "alice", "secret1")
+    register(client)
     todo = client.post("/todos", json={"title": "alice's secret"}).json()
 
     bob = TestClient(main.app)
-    register(bob, "bob", "secret2")
+    register(bob, BOB)
 
     assert bob.get("/todos").json() == []
     assert bob.put(f"/todos/{todo['id']}", json={"title": "hijacked"}).status_code == 404
     assert bob.delete(f"/todos/{todo['id']}").status_code == 404
 
     # alice의 데이터는 그대로 남아 있어야 한다
-    assert client.get("/todos").json() == [todo]
+    assert client.get("/todos").json() == [{**todo, "reaction_counts": {}}]
 
 
 def test_todo_defaults_to_normal_priority_and_no_due_date(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post("/todos", json={"title": "우유 사기"}).json()
     assert created["priority"] == "normal"
     assert created["due_date"] is None
 
 
 def test_todo_priority_and_due_date_roundtrip(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post(
         "/todos",
         json={"title": "발표 준비", "priority": "high", "due_date": "2026-12-25"},
@@ -362,7 +397,7 @@ def test_todo_priority_and_due_date_roundtrip(client):
 
 
 def test_todo_search_filters_by_title_and_description(client):
-    register(client, "alice", "secret1")
+    register(client)
     client.post("/todos", json={"title": "우유 사기", "description": "2%"})
     client.post("/todos", json={"title": "운동하기", "description": "헬스장"})
 
@@ -374,7 +409,7 @@ def test_todo_search_filters_by_title_and_description(client):
 
 
 def test_todo_sort_by_priority_puts_high_first(client):
-    register(client, "alice", "secret1")
+    register(client)
     client.post("/todos", json={"title": "일반 할 일", "priority": "normal"})
     client.post("/todos", json={"title": "중요한 할 일", "priority": "high"})
 
@@ -383,7 +418,7 @@ def test_todo_sort_by_priority_puts_high_first(client):
 
 
 def test_todo_sort_by_due_date_puts_items_without_due_date_last(client):
-    register(client, "alice", "secret1")
+    register(client)
     client.post("/todos", json={"title": "날짜 없음"})
     client.post("/todos", json={"title": "먼 미래", "due_date": "2026-12-31"})
     client.post("/todos", json={"title": "가까운 미래", "due_date": "2026-11-01"})
@@ -393,7 +428,7 @@ def test_todo_sort_by_due_date_puts_items_without_due_date_last(client):
 
 
 def test_stats_streak_increments_once_per_day_when_all_done(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post("/todos", json={"title": "할 일"}).json()
 
     assert client.get("/stats").json()["streak"] == 0
@@ -404,37 +439,34 @@ def test_stats_streak_increments_once_per_day_when_all_done(client):
     assert client.get("/stats").json()["streak"] == 1
 
 
-def test_add_friend_by_code_links_both_directions(client):
-    register(client, "alice", "secret1")
-    alice_code = client.get("/auth/me").json()["friend_code"]
+def test_add_friend_by_username_links_both_directions(client):
+    register(client)
 
     bob = TestClient(main.app)
-    register(bob, "bob", "secret1")
+    register(bob, BOB)
 
-    response = bob.post("/friends", json={"friend_code": alice_code})
+    response = bob.post("/friends", json={"username": ALICE})
     assert response.status_code == 201
-    assert response.json()["username"] == "alice"
-    assert [f["username"] for f in bob.get("/friends").json()] == ["alice"]
-    assert [f["username"] for f in client.get("/friends").json()] == ["bob"]
+    assert response.json()["username"] == ALICE
+    assert [f["username"] for f in bob.get("/friends").json()] == [ALICE]
+    assert [f["username"] for f in client.get("/friends").json()] == [BOB]
 
 
-def test_add_friend_with_unknown_code_is_404(client):
-    register(client, "alice", "secret1")
-    assert client.post("/friends", json={"friend_code": "ZZZZZZ"}).status_code == 404
+def test_add_friend_with_unknown_username_is_404(client):
+    register(client)
+    assert client.post("/friends", json={"username": "99999999"}).status_code == 404
 
 
 def test_add_self_as_friend_is_rejected(client):
-    register(client, "alice", "secret1")
-    code = client.get("/auth/me").json()["friend_code"]
-    assert client.post("/friends", json={"friend_code": code}).status_code == 400
+    register(client)
+    assert client.post("/friends", json={"username": ALICE}).status_code == 400
 
 
 def test_remove_friend_unlinks_both_directions(client):
-    register(client, "alice", "secret1")
-    alice_code = client.get("/auth/me").json()["friend_code"]
+    register(client)
     bob = TestClient(main.app)
-    register(bob, "bob", "secret1")
-    bob.post("/friends", json={"friend_code": alice_code})
+    register(bob, BOB)
+    bob.post("/friends", json={"username": ALICE})
     bob_id = client.get("/friends").json()[0]["id"]
 
     assert client.delete(f"/friends/{bob_id}").status_code == 204
@@ -443,14 +475,13 @@ def test_remove_friend_unlinks_both_directions(client):
 
 
 def test_friend_can_view_and_toggle_reaction(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post("/todos", json={"title": "밥 먹기"}).json()
     alice_id = client.get("/auth/me").json()["id"]
-    alice_code = client.get("/auth/me").json()["friend_code"]
 
     bob = TestClient(main.app)
-    register(bob, "bob", "secret1")
-    bob.post("/friends", json={"friend_code": alice_code})
+    register(bob, BOB)
+    bob.post("/friends", json={"username": ALICE})
 
     friend_todos = bob.get(f"/friends/{alice_id}/todos").json()
     assert friend_todos[0]["title"] == "밥 먹기"
@@ -470,32 +501,45 @@ def test_friend_can_view_and_toggle_reaction(client):
     assert bob.get(f"/friends/{alice_id}/todos").json()[0]["reaction_counts"] == {}
 
 
+def test_own_todo_list_shows_reactions_left_by_friends(client):
+    register(client)
+    created = client.post("/todos", json={"title": "밥 먹기"}).json()
+
+    bob = TestClient(main.app)
+    register(bob, BOB)
+    bob.post("/friends", json={"username": ALICE})
+
+    assert client.get("/todos").json()[0]["reaction_counts"] == {}
+
+    bob.post(f"/todos/{created['id']}/reactions", json={"emoji": "🔥"})
+    assert client.get("/todos").json()[0]["reaction_counts"] == {"🔥": 1}
+
+
 def test_cannot_react_to_own_todo(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post("/todos", json={"title": "할 일"}).json()
     assert client.post(f"/todos/{created['id']}/reactions", json={"emoji": "👍"}).status_code == 400
 
 
 def test_non_friend_cannot_view_or_react(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post("/todos", json={"title": "할 일"}).json()
     alice_id = client.get("/auth/me").json()["id"]
 
     bob = TestClient(main.app)
-    register(bob, "bob", "secret1")
+    register(bob, BOB)
 
     assert bob.get(f"/friends/{alice_id}/todos").status_code == 403
     assert bob.post(f"/todos/{created['id']}/reactions", json={"emoji": "👍"}).status_code == 403
 
 
 def test_invalid_reaction_emoji_is_rejected(client):
-    register(client, "alice", "secret1")
+    register(client)
     created = client.post("/todos", json={"title": "할 일"}).json()
-    alice_code = client.get("/auth/me").json()["friend_code"]
 
     bob = TestClient(main.app)
-    register(bob, "bob", "secret1")
-    bob.post("/friends", json={"friend_code": alice_code})
+    register(bob, BOB)
+    bob.post("/friends", json={"username": ALICE})
 
     response = bob.post(f"/todos/{created['id']}/reactions", json={"emoji": "🙂"})
     assert response.status_code == 422

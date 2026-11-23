@@ -61,6 +61,7 @@
             outline: none;
         }
         input:focus { border-color: var(--ink); box-shadow: 0 0 0 3px rgb(30 38 32 / .1); }
+        #register-note { margin: -.2rem 0 0; font-size: .8rem; color: var(--muted); }
         button[type="submit"] {
             border: 1px solid var(--ink);
             border-radius: 6px;
@@ -105,8 +106,9 @@
     <div class="card">
         <p id="error" role="alert" hidden></p>
         <form id="auth-form">
-            <input type="text" id="username" placeholder="아이디 (영문/숫자/_, 3자 이상)" required>
-            <input type="password" id="password" placeholder="비밀번호 (4자 이상)" required>
+            <input type="text" id="username" placeholder="학번 (숫자만)" inputmode="numeric" pattern="[0-9]*" required>
+            <input type="password" id="password" placeholder="비밀번호 (숫자만)" inputmode="numeric" pattern="[0-9]*" required>
+            <p id="register-note" hidden>회원가입 시 초기 비밀번호는 0000으로 설정됩니다. 로그인 후 비밀번호를 바꿀 수 있어요.</p>
             <button type="submit" id="submit-btn">로그인</button>
         </form>
         <div id="toggle">
@@ -119,21 +121,25 @@
 
         $("toggle-btn").onclick = () => {
           mode = mode === "login" ? "register" : "login";
-          $("submit-btn").textContent = mode === "login" ? "로그인" : "회원가입";
-          $("toggle-btn").textContent = mode === "login" ? "회원가입" : "로그인";
-          $("toggle").firstChild.textContent = mode === "login" ? "계정이 없으신가요? " : "이미 계정이 있으신가요? ";
+          const isRegister = mode === "register";
+          $("submit-btn").textContent = isRegister ? "회원가입" : "로그인";
+          $("toggle-btn").textContent = isRegister ? "로그인" : "회원가입";
+          $("toggle").firstChild.textContent = isRegister ? "이미 계정이 있으신가요? " : "계정이 없으신가요? ";
+          $("password").hidden = isRegister;
+          $("password").required = !isRegister;
+          $("register-note").hidden = !isRegister;
           $("error").hidden = true;
         };
 
         $("auth-form").onsubmit = async (event) => {
           event.preventDefault();
           const username = $("username").value.trim();
-          const password = $("password").value;
+          const payload = mode === "register" ? { username } : { username, password: $("password").value };
           try {
             const res = await fetch(`/auth/${mode}`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username, password }),
+              body: JSON.stringify(payload),
             });
             if (!res.ok) throw new Error((await res.json()).detail ?? `${res.status}`);
             location.href = "/";

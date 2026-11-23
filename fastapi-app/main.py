@@ -34,7 +34,6 @@ RELEASE_NOTES_TEMPLATE = BASE_DIR / "templates" / "release_notes.html"
 
 PBKDF2_ITERATIONS = 200_000
 TRASH_RETENTION_DAYS = 7                         # 휴지통 보관 기간 — 이 기간이 지나면 완전히 삭제
-FRIEND_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"   # 0/O, 1/I/L 등 헷갈리는 글자 제외
 REACTION_EMOJI = ("👍", "❤️", "🔥", "😂", "😮", "👏")
 
 
@@ -56,18 +55,6 @@ def get_db():
         conn.close()
 
 
-def _assign_friend_code(conn: sqlite3.Connection, user_id: int) -> str:
-    # 충돌 가능성은 희박하지만(6자리, 32종 알파벳), 유니크 인덱스 위반 시 다시 뽑는다
-    for _ in range(5):
-        code = "".join(secrets.choice(FRIEND_CODE_ALPHABET) for _ in range(6))
-        try:
-            conn.execute("UPDATE users SET friend_code = ? WHERE id = ?", (code, user_id))
-            return code
-        except sqlite3.IntegrityError:
-            continue
-    raise RuntimeError("친구 코드를 생성하지 못했습니다")
-
-
 def init_db() -> None:
     with get_db() as conn:
         conn.execute(
@@ -76,18 +63,10 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                password_salt TEXT NOT NULL,
-                friend_code TEXT
+                password_salt TEXT NOT NULL
             )
             """
         )
-        # 기존 DB(볼륨)에 이미 users 테이블이 있던 경우를 위한 마이그레이션
-        existing_user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
-        if "friend_code" not in existing_user_columns:
-            conn.execute("ALTER TABLE users ADD COLUMN friend_code TEXT")
-        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_friend_code ON users (friend_code)")
-        for row in conn.execute("SELECT id FROM users WHERE friend_code IS NULL"):
-            _assign_friend_code(conn, row["id"])
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS todos (
@@ -241,13 +220,31 @@ class TrashedTodoItem(TodoItem):                 # 휴지통 목록용 — 삭�
     deleted_at: str
 
 
-class AuthIn(BaseModel):
-    username: str = Field(min_length=3, max_length=30, pattern=r"^[A-Za-z0-9_]+$")
-    password: str = Field(min_length=4, max_length=100)
+class TodoItemWithReactions(TodoItem):           # 내 할 일 목록용 — 친구가 남긴 반응 집계 포함
+    reaction_counts: dict[str, int]
 
 
-class FriendCodeIn(BaseModel):
-    friend_code: str = Field(min_length=6, max_length=6)
+STUDENT_ID_PATTERN = r"^[0-9]{4,12}$"        # 아이디 = 학번 (숫자만)
+NUMERIC_PASSWORD_PATTERN = r"^[0-9]{4,20}$"  # 비밀번호도 숫자만
+DEFAULT_PASSWORD = "0000"                    # 회원가입 시 초기 비밀번호 — 로그인 후 변경 가능
+
+
+class RegisterIn(BaseModel):                 # 회원가입은 학번만 받음 (비밀번호는 0000으로 고정)
+    username: str = Field(pattern=STUDENT_ID_PATTERN)
+
+
+class LoginIn(BaseModel):
+    username: str = Field(pattern=STUDENT_ID_PATTERN)
+    password: str = Field(pattern=NUMERIC_PASSWORD_PATTERN)
+
+
+class PasswordChangeIn(BaseModel):
+    old_password: str = Field(pattern=NUMERIC_PASSWORD_PATTERN)
+    new_password: str = Field(pattern=NUMERIC_PASSWORD_PATTERN)
+
+
+class AddFriendIn(BaseModel):                    # 학번으로 친구 추가
+    username: str = Field(pattern=STUDENT_ID_PATTERN)
 
 
 class FriendOut(BaseModel):
@@ -269,7 +266,7 @@ def get_current_user(request: Request) -> sqlite3.Row:
     if user_id is None:
         raise HTTPException(401, "로그인이 필요합니다")
     with get_db() as conn:
-        user = conn.execute("SELECT id, username, friend_code FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = conn.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
     if user is None:
         request.session.clear()
         raise HTTPException(401, "로그인이 필요합니다")
@@ -285,6 +282,21 @@ def _row_to_todo(row: sqlite3.Row) -> TodoItem:
         priority=row["priority"],
         due_date=row["due_date"],
     )
+
+
+def _reaction_counts_by_todo(conn: sqlite3.Connection, todo_ids: list[int]) -> dict[int, dict[str, int]]:
+    counts: dict[int, dict[str, int]] = {todo_id: {} for todo_id in todo_ids}
+    if not todo_ids:
+        return counts
+    placeholders = ",".join("?" * len(todo_ids))
+    rows = conn.execute(
+        f"SELECT todo_id, emoji, COUNT(*) AS cnt FROM todo_reactions "
+        f"WHERE todo_id IN ({placeholders}) GROUP BY todo_id, emoji",
+        todo_ids,
+    ).fetchall()
+    for row in rows:
+        counts[row["todo_id"]][row["emoji"]] = row["cnt"]
+    return counts
 
 
 def _recompute_streak(conn: sqlite3.Connection, user_id: int) -> int:
@@ -318,9 +330,9 @@ def _recompute_streak(conn: sqlite3.Connection, user_id: int) -> int:
     return streak
 
 
-@app.post("/auth/register", status_code=201)     # 회원가입 — 성공 시 바로 로그인 처리
-def register(payload: AuthIn, request: Request) -> dict:
-    password_hash, password_salt = hash_password(payload.password)
+@app.post("/auth/register", status_code=201)     # 회원가입 — 초기 비밀번호 0000, 성공 시 바로 로그인 처리
+def register(payload: RegisterIn, request: Request) -> dict:
+    password_hash, password_salt = hash_password(DEFAULT_PASSWORD)
     with get_db() as conn:
         try:
             cur = conn.execute(
@@ -328,22 +340,21 @@ def register(payload: AuthIn, request: Request) -> dict:
                 (payload.username, password_hash, password_salt),
             )
         except sqlite3.IntegrityError:
-            raise HTTPException(409, "이미 사용 중인 아이디입니다")
+            raise HTTPException(409, "이미 등록된 학번입니다")
         user_id = cur.lastrowid
-        _assign_friend_code(conn, user_id)
     request.session["user_id"] = user_id
     return {"username": payload.username}
 
 
 @app.post("/auth/login")                         # 로그인
-def login(payload: AuthIn, request: Request) -> dict:
+def login(payload: LoginIn, request: Request) -> dict:
     with get_db() as conn:
         user = conn.execute(
             "SELECT id, username, password_hash, password_salt FROM users WHERE username = ?",
             (payload.username,),
         ).fetchone()
     if user is None or not verify_password(payload.password, user["password_salt"], user["password_hash"]):
-        raise HTTPException(401, "아이디 또는 비밀번호가 올바르지 않습니다")
+        raise HTTPException(401, "학번 또는 비밀번호가 올바르지 않습니다")
     request.session["user_id"] = user["id"]
     return {"username": user["username"]}
 
@@ -354,9 +365,27 @@ def logout(request: Request) -> dict:
     return {"ok": True}
 
 
+@app.post("/auth/password")                      # 비밀번호 변경 — 현재 비밀번호 확인 후 변경
+def change_password(payload: PasswordChangeIn, user: sqlite3.Row = Depends(get_current_user)) -> dict:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT password_hash, password_salt FROM users WHERE id = ?", (user["id"],)
+        ).fetchone()
+        if not verify_password(payload.old_password, row["password_salt"], row["password_hash"]):
+            # 401이 아니라 400 — 이미 로그인된 상태라 "재인증 필요"가 아니라 "입력값이 틀림".
+            # 프런트의 공용 api() 헬퍼는 401을 전부 세션 만료로 간주해 /login으로 보내버린다.
+            raise HTTPException(400, "현재 비밀번호가 올바르지 않습니다")
+        new_hash, new_salt = hash_password(payload.new_password)
+        conn.execute(
+            "UPDATE users SET password_hash = ?, password_salt = ? WHERE id = ?",
+            (new_hash, new_salt, user["id"]),
+        )
+    return {"ok": True}
+
+
 @app.get("/auth/me")                             # 현재 로그인한 사용자 확인
 def me(user: sqlite3.Row = Depends(get_current_user)) -> dict:
-    return {"id": user["id"], "username": user["username"], "friend_code": user["friend_code"]}
+    return {"id": user["id"], "username": user["username"]}
 
 
 @app.get("/todos")                               # 목록 조회 (completed/검색/정렬 가능, 본인 것만)
@@ -365,14 +394,18 @@ def get_todos(
     q: str | None = None,
     sort: Literal["due_date", "priority"] | None = None,
     user: sqlite3.Row = Depends(get_current_user),
-) -> list[TodoItem]:
+) -> list[TodoItemWithReactions]:
     with get_db() as conn:
         rows = conn.execute(
             "SELECT id, title, description, completed, priority, due_date FROM todos "
             "WHERE user_id = ? AND deleted_at IS NULL ORDER BY id",
             (user["id"],),
         ).fetchall()
-    todos = [_row_to_todo(row) for row in rows]
+        reaction_counts = _reaction_counts_by_todo(conn, [row["id"] for row in rows])
+    todos = [
+        TodoItemWithReactions(**_row_to_todo(row).model_dump(), reaction_counts=reaction_counts[row["id"]])
+        for row in rows
+    ]
     if completed is not None:
         todos = [t for t in todos if t.completed == completed]
     needle = q.strip().lower() if q else ""
@@ -474,13 +507,12 @@ def list_friends(user: sqlite3.Row = Depends(get_current_user)) -> list[FriendOu
     return [FriendOut(id=row["id"], username=row["username"]) for row in rows]
 
 
-@app.post("/friends", status_code=201)           # 친구 코드로 추가 — 요청/수락 없이 바로 양방향 연결
-def add_friend(payload: FriendCodeIn, user: sqlite3.Row = Depends(get_current_user)) -> FriendOut:
-    code = payload.friend_code.strip().upper()
+@app.post("/friends", status_code=201)           # 학번으로 추가 — 요청/수락 없이 바로 양방향 연결
+def add_friend(payload: AddFriendIn, user: sqlite3.Row = Depends(get_current_user)) -> FriendOut:
     with get_db() as conn:
-        friend = conn.execute("SELECT id, username FROM users WHERE friend_code = ?", (code,)).fetchone()
+        friend = conn.execute("SELECT id, username FROM users WHERE username = ?", (payload.username,)).fetchone()
         if friend is None:
-            raise HTTPException(404, "친구 코드를 찾을 수 없습니다")
+            raise HTTPException(404, "해당 학번을 찾을 수 없습니다")
         if friend["id"] == user["id"]:
             raise HTTPException(400, "본인을 친구로 추가할 수 없습니다")
         now = datetime.now(timezone.utc).isoformat()
