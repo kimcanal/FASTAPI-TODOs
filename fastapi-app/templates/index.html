@@ -3,129 +3,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>투두 프린세스 · To-Do List</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
+    <title>할 일 목록</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='3' width='18' height='18' rx='2' fill='none' stroke='%231E2620' stroke-width='2'/%3E%3Cpath d='M7 12l3 3 7-7' fill='none' stroke='%231E2620' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
     <style>
         :root {
-            --bg-pink: #ffd6ec;
-            --bg-lavender: #f1dcff;
-            --card: #fff6fb;
-            --card-border: #f0c869;
-            --ink: #6b3a52;
-            --muted: #b98aa5;
-            --border: #f7d7ea;
-            --accent: #ec6ba1;
-            --accent-dark: #d44f87;
+            --paper: #eef0e6;
+            --surface: #f8f9f2;
+            --ink: #1e2620;
+            --muted: #6b7262;
+            --rule: #c7d0be;
+            --accent: #8c3229;
             --accent-ink: #ffffff;
-            --highlight: #ffd1ea;
-            --danger: #e2607a;
-            --danger-bg: #fff0f5;
-            --cursor-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='24' font-size='26'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E") 6 6, auto;
+            --done: #3f6b4a;
+            --done-bg: #e3ead4;
         }
         * { box-sizing: border-box; }
-        html, body { cursor: var(--cursor-icon); }
+        html { background: var(--paper); }
         body {
-            font-family: "Jua", "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+            font-family: "Pretendard Variable", "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+            width: 100%;
             max-width: 640px;
-            margin: 3rem auto;
-            padding: 0 1rem;
+            margin-inline: auto;
+            margin-block: clamp(1rem, 5vh, 2.5rem) 2rem;
+            padding-inline: clamp(1rem, 4vw, 1.5rem);
             color: var(--ink);
-            background: linear-gradient(165deg, var(--bg-pink) 0%, var(--bg-pink) 35%, var(--bg-lavender) 100%);
+            background:
+                repeating-linear-gradient(var(--paper) 0 27px, var(--rule) 27px 28px),
+                var(--paper);
             min-height: 100vh;
+            min-height: 100svh;      /* 모바일 주소창이 접히고 펼쳐져도 높이가 들썩이지 않게 */
+            line-height: 1.5;
         }
-        @media (max-width: 480px) {
-            body { margin: 1.5rem auto; }
-            h1 { font-size: 1.35rem; }
-            .card { padding: 1.1rem; border-radius: 12px; }
+        /* 가로모드(랜드스케이프) 등 세로 공간이 좁을 때는 위아래 여백을 더 줄인다 */
+        @media (max-height: 480px) {
+            body { margin-block: 1rem 1.25rem; }
         }
+        a { color: var(--ink); }
+        :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
         h1 {
-            font-size: 1.6rem;
+            font-family: "Gowun Batang", serif;
+            font-size: clamp(1.3rem, 4vw + .5rem, 1.55rem);
+            font-weight: 700;
             margin: 0 0 1.25rem;
-            letter-spacing: -.02rem;
         }
         .card {
-            background: var(--card);
-            border: 3px solid var(--card-border);
-            border-radius: 22px;
-            padding: 1.5rem;
-            box-shadow: 0 10px 30px -14px rgba(214, 51, 132, .22);
+            background: var(--surface);
+            border: 1px solid var(--rule);
+            border-radius: 10px;
+            padding: clamp(1rem, 4vw, 1.4rem) clamp(1.1rem, 4vw, 1.5rem);
         }
         form { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: 1rem; }
         input[type="text"] {
             flex: 1 1 12rem;
             padding: .6rem .75rem;
-            border: 2px solid var(--border);
-            border-radius: 12px;
+            border: 1px solid var(--rule);
+            border-radius: 6px;
             font-size: 1rem;             /* 16px 미만이면 iOS Safari가 포커스 시 자동 확대함 */
             outline: none;
-            background: #fff8fc;
+            background: #fff;
             color: var(--ink);
+            font-family: inherit;
             transition: border-color .15s, box-shadow .15s;
         }
         input[type="text"]:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgb(236 107 161 / .2);
+            border-color: var(--ink);
+            box-shadow: 0 0 0 3px rgb(30 38 32 / .1);
         }
         select, input[type="date"] {
             padding: .6rem .6rem;
-            border: 2px solid var(--border);
-            border-radius: 12px;
+            border: 1px solid var(--rule);
+            border-radius: 6px;
             font-size: .9rem;
             font-family: inherit;
-            background: #fff8fc;
+            background: #fff;
             color: var(--ink);
             outline: none;
-            cursor: var(--cursor-icon);
         }
         select:focus, input[type="date"]:focus {
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgb(236 107 161 / .2);
+            border-color: var(--ink);
+            box-shadow: 0 0 0 3px rgb(30 38 32 / .1);
         }
         #search { flex: 1 1 8rem; }
         #celebrate {
-            background: var(--highlight);
-            color: var(--ink);
-            border: 2px solid var(--card-border);
-            border-radius: 12px;
+            background: var(--done-bg);
+            color: var(--done);
+            border: 1px solid var(--done);
+            border-radius: 6px;
             padding: .6rem .75rem;
             margin: 0 0 1rem;
             font-size: .875rem;
-            text-align: center;
             font-weight: 600;
         }
         .badge {
             font-size: .75rem;
             padding: .15rem .5rem;
-            border-radius: 999px;
-            background: var(--border);
-            color: var(--ink);
+            border-radius: 4px;
+            border: 1px solid var(--rule);
+            color: var(--muted);
             flex: none;
         }
-        .badge.overdue { background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+        .badge.overdue { border-color: var(--accent); color: var(--accent); font-weight: 600; }
         button {
-            border: none;
-            border-radius: 999px;
-            padding: .6rem 1.1rem;
+            border: 1px solid var(--rule);
+            border-radius: 6px;
+            background: #fff;
+            color: var(--ink);
+            padding: .55rem 1rem;
             font-size: .9rem;
             font-family: inherit;
-            cursor: var(--cursor-icon);
-            transition: transform .1s, opacity .15s, background .15s;
+            cursor: pointer;
+            transition: background .15s, border-color .15s;
         }
-        button:active { transform: scale(.94); }
+        button:hover { background: var(--paper); }
         form button[type="submit"] {
-            background: var(--accent);
+            background: var(--ink);
+            border-color: var(--ink);
             color: var(--accent-ink);
             font-weight: 600;
         }
-        form button[type="submit"]:hover { background: var(--accent-dark); }
+        form button[type="submit"]:hover { background: #343f36; }
         #error {
-            color: var(--danger);
-            background: var(--danger-bg);
-            border: 1px solid #f6b8cf;
-            border-radius: 10px;
+            color: var(--accent);
+            background: #fbeceb;
+            border: 1px solid var(--accent);
+            border-radius: 6px;
             padding: .6rem .75rem;
             margin: 0 0 1rem;
             font-size: .875rem;
@@ -137,17 +142,18 @@
             align-items: center;
             margin-bottom: 1rem;
             padding-bottom: 1rem;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--rule);
         }
         #filters button[data-filter] {
             background: transparent;
+            border-color: transparent;
             color: var(--muted);
-            padding: .35rem .8rem;
-            border-radius: 999px;
+            padding: .35rem .75rem;
         }
-        #filters button[data-filter]:hover { background: #fbdceb; }
+        #filters button[data-filter]:hover { border-color: var(--rule); }
         #filters button.active {
-            background: var(--accent);
+            background: var(--ink);
+            border-color: var(--ink);
             color: var(--accent-ink);
             font-weight: 600;
         }
@@ -163,31 +169,27 @@
             flex-wrap: wrap;
             gap: .5rem .7rem;
             padding: .65rem .25rem;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--rule);
         }
         li:last-child { border-bottom: none; }
         li input[type="checkbox"] {
-            width: 1.15rem;
-            height: 1.15rem;
-            accent-color: var(--accent);
-            cursor: var(--cursor-icon);
+            width: 1.1rem;
+            height: 1.1rem;
+            accent-color: var(--ink);
             flex: none;
         }
         li span { flex: 1 1 auto; min-width: 8rem; word-break: break-word; }
         .done { text-decoration: line-through; color: var(--muted); }
         li button {
-            background: #fbdceb;
-            color: var(--ink);
             font-size: .8rem;
-            padding: .5rem .7rem;
+            padding: .45rem .7rem;
             flex: none;
         }
-        li button:hover { background: #f6c3dc; }
         li button:last-child {
-            background: var(--danger-bg);
-            color: var(--danger);
+            color: var(--accent);
+            border-color: var(--accent);
         }
-        li button:last-child:hover { background: #ffd9e4; }
+        li button:last-child:hover { background: #fbeceb; }
         li.editing input[type="text"] {
             flex: 1 1 8rem;
             padding: .5rem .6rem;
@@ -199,8 +201,7 @@
             font-size: .8rem;
             color: var(--muted);
         }
-        footer a { color: var(--accent); text-decoration: none; }
-        footer a:hover { text-decoration: underline; }
+        footer a { text-decoration: underline; }
         #user-bar {
             display: flex;
             justify-content: flex-end;
@@ -212,35 +213,35 @@
         }
         #user-bar button {
             background: transparent;
-            border: 2px solid var(--border);
+            border: 1px solid var(--rule);
             color: var(--muted);
             padding: .3rem .7rem;
             font-size: .8rem;
         }
-        #user-bar button:hover { background: #fbdceb; }
+        #user-bar button:hover { background: var(--surface); }
         #undo-toast {
             position: fixed;
             left: 50%;
             bottom: 1.5rem;
             transform: translateX(-50%);
-            display: flex;
             align-items: center;
             gap: .75rem;
             background: var(--ink);
-            color: #fff6fb;
+            color: var(--surface);
             padding: .7rem 1rem;
-            border-radius: 14px;
-            box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .35);
+            border-radius: 8px;
             font-size: .9rem;
             z-index: 10;
         }
+        #undo-toast:not([hidden]) { display: flex; }
         #undo-toast button {
-            background: var(--accent);
-            color: #fff;
+            background: transparent;
+            border: 1px solid var(--surface);
+            color: var(--surface);
             font-weight: 600;
             padding: .4rem .8rem;
         }
-        #undo-toast button:hover { background: var(--accent-dark); }
+        #undo-toast button:hover { background: #343f36; }
         #trash-card { margin-top: 1rem; }
         #trash-header {
             display: flex;
@@ -249,9 +250,9 @@
             gap: .5rem 1rem;
             margin-bottom: .75rem;
             padding-bottom: .75rem;
-            border-bottom: 1px solid var(--border);
+            border-bottom: 1px solid var(--rule);
         }
-        #trash-header h2 { font-size: 1.05rem; margin: 0; }
+        #trash-header h2 { font-family: "Gowun Batang", serif; font-size: 1.05rem; margin: 0; }
         #trash-header p { margin: 0; font-size: .8rem; color: var(--muted); flex: 1 1 14rem; }
         #trash-empty { color: var(--muted); font-size: .9rem; padding: .5rem .25rem; }
         #trash-list li span.trash-meta { flex: none; font-size: .78rem; color: var(--muted); }
@@ -262,42 +263,104 @@
         }
         #csv-tools button, #csv-tools label {
             background: transparent;
-            border: 2px solid var(--border);
+            border: 1px solid var(--rule);
             color: var(--muted);
-            padding: .35rem .8rem;
-            border-radius: 999px;
+            padding: .35rem .75rem;
+            border-radius: 6px;
             font-size: .8rem;
-            cursor: var(--cursor-icon);
+            cursor: pointer;
         }
-        #csv-tools button:hover, #csv-tools label:hover { background: #fbdceb; }
+        #csv-tools button:hover, #csv-tools label:hover { background: var(--paper); }
+        #friends-card { margin-top: 1rem; }
+        #my-code-row {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: .5rem;
+            margin-bottom: 1rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--rule);
+        }
+        #my-code-row p { margin: 0; font-size: .85rem; color: var(--muted); flex: 1 1 10rem; }
+        #my-code {
+            font-weight: 700;
+            letter-spacing: .1rem;
+            background: var(--paper);
+            border: 1px solid var(--rule);
+            padding: .3rem .6rem;
+            border-radius: 6px;
+        }
+        #add-friend-form { margin-bottom: 1rem; }
+        #add-friend-form input { text-transform: uppercase; }
+        #friend-list li span.friend-name { font-weight: 600; }
+        #friend-todos-header {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            margin-bottom: .75rem;
+            padding-bottom: .75rem;
+            border-bottom: 1px solid var(--rule);
+        }
+        #friend-todos-header h2 { font-family: "Gowun Batang", serif; font-size: 1.05rem; margin: 0; flex: 1; }
+        #friend-empty { color: var(--muted); font-size: .9rem; padding: .5rem .25rem; }
+        #friend-todo-list li { flex-direction: column; align-items: stretch; }
+        #friend-todo-list .friend-todo-main {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: .5rem .7rem;
+            width: 100%;
+        }
+        .reaction-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .3rem;
+            margin-top: .4rem;
+        }
+        .reaction-bar button {
+            padding: .3rem .55rem;
+            font-size: .95rem;
+            line-height: 1;
+        }
+        .reaction-bar button.picked {
+            background: var(--ink);
+            border-color: var(--ink);
+        }
+        .reaction-bar .reaction-count {
+            font-size: .7rem;
+            color: var(--muted);
+            margin-left: .15rem;
+        }
+        .reaction-bar button.picked .reaction-count { color: var(--surface); }
     </style>
 </head>
 <body>
     <div id="user-bar">
         <span id="streak-info"></span>
         <span id="username-info"></span>
-        <button type="button" id="trash-toggle-btn">🗑 휴지통</button>
+        <button type="button" id="friends-toggle-btn">친구</button>
+        <button type="button" id="trash-toggle-btn">휴지통</button>
         <button type="button" id="logout-btn">로그아웃</button>
     </div>
-    <h1>👑 투두 프린세스의 할 일 목록</h1>
+    <h1>할 일 목록</h1>
     <div class="card">
         <form id="todo-form">
             <input type="text" id="title" placeholder="제목 (예: 20231234)" required>
             <input type="text" id="description" placeholder="설명 (예: 홍길동)">
             <select id="priority">
-                <option value="normal">💌 일반</option>
-                <option value="high">👑 중요</option>
+                <option value="normal">보통</option>
+                <option value="high">중요</option>
             </select>
             <input type="date" id="due-date">
             <button type="submit">추가</button>
         </form>
         <p id="error" role="alert" hidden></p>
-        <p id="celebrate" hidden>🎉 오늘도 고생했어요 공주님! 할 일을 전부 끝냈어요.</p>
+        <p id="celebrate" hidden>오늘 할 일을 모두 완료했습니다.</p>
         <div id="filters">
             <button data-filter="all" class="active">전체</button>
             <button data-filter="active">진행중</button>
             <button data-filter="completed">완료</button>
-            <input type="text" id="search" placeholder="🔍 검색">
+            <input type="text" id="search" placeholder="검색">
             <select id="sort">
                 <option value="">정렬: 기본</option>
                 <option value="due_date">마감일순</option>
@@ -306,20 +369,42 @@
             <span id="count"></span>
         </div>
         <div id="csv-tools">
-            <button type="button" id="export-btn">⬇ CSV 내보내기</button>
-            <label id="import-label" for="import-input">⬆ CSV 가져오기</label>
+            <button type="button" id="export-btn">CSV 내보내기</button>
+            <label id="import-label" for="import-input">CSV 가져오기</label>
             <input type="file" id="import-input" accept=".csv,text/csv" hidden>
         </div>
         <ul id="todo-list"></ul>
     </div>
     <div class="card" id="trash-card" hidden>
         <div id="trash-header">
-            <h2>🗑 휴지통</h2>
+            <h2>휴지통</h2>
             <p>삭제한 할 일은 7일 동안 보관되고, 그 전에 복원하지 않으면 자동으로 완전히 삭제됩니다. 복원하면 미완료 상태로 돌아옵니다.</p>
             <button type="button" id="trash-close-btn">닫기</button>
         </div>
         <p id="trash-empty" hidden>휴지통이 비어 있어요.</p>
         <ul id="trash-list"></ul>
+    </div>
+    <div class="card" id="friends-card" hidden>
+        <div id="friend-list-view">
+            <div id="my-code-row">
+                <p>내 친구 코드를 알려주면 친구가 나를 추가할 수 있어요.</p>
+                <span id="my-code"></span>
+            </div>
+            <form id="add-friend-form">
+                <input type="text" id="friend-code-input" placeholder="친구 코드 입력 (예: AB12CD)" maxlength="6" required>
+                <button type="submit">추가</button>
+            </form>
+            <p id="friend-error" role="alert" hidden></p>
+            <p id="friend-empty" hidden>아직 친구가 없어요. 친구 코드를 받아서 추가해보세요.</p>
+            <ul id="friend-list"></ul>
+        </div>
+        <div id="friend-todos-view" hidden>
+            <div id="friend-todos-header">
+                <h2 id="friend-todos-title"></h2>
+                <button type="button" id="friend-back-btn">← 목록으로</button>
+            </div>
+            <ul id="friend-todo-list"></ul>
+        </div>
     </div>
     <div id="undo-toast" hidden></div>
     <footer>
@@ -336,12 +421,12 @@
         let sortMode = "";
         let editingId = null;
 
-        const PRIORITY_LABEL = { high: "👑 중요", normal: "💌 일반" };
+        const PRIORITY_LABEL = { high: "중요", normal: "보통" };
 
         function formatDueDate(dueDate, completed) {
           if (!dueDate) return null;
           const isOverdue = !completed && dueDate < new Date().toISOString().slice(0, 10);
-          return { text: `📅 ${dueDate}${isOverdue ? " (지남)" : ""}`, overdue: isOverdue };
+          return { text: `${dueDate}${isOverdue ? " (지남)" : ""}`, overdue: isOverdue };
         }
 
         // 모든 요청을 한 곳에서 처리하고, 실패는 조용히 넘기지 않는다
@@ -608,7 +693,7 @@
         async function loadStats() {
           try {
             const info = await api("/stats");
-            $("streak-info").textContent = info.streak > 0 ? `🔥 ${info.streak}일 연속 달성 중!` : "";
+            $("streak-info").textContent = info.streak > 0 ? `${info.streak}일 연속 완료` : "";
           } catch {
             $("streak-info").textContent = "";
           }
@@ -627,6 +712,7 @@
           try {
             const info = await api("/auth/me");
             $("username-info").textContent = `${info.username}님`;
+            $("my-code").textContent = info.friend_code;
           } catch {
             // api()가 401이면 이미 /login으로 이동시킨다
           }
@@ -636,6 +722,128 @@
           await api("/auth/logout", "POST");
           location.href = "/login";
         });
+
+        // ── 친구 ──
+        const REACTION_EMOJI = ["👍", "❤️", "🔥", "😂", "😮", "👏"];
+        let friends = [];
+        let currentFriend = null;
+
+        function showFriendListView() {
+          currentFriend = null;
+          $("friend-list-view").hidden = false;
+          $("friend-todos-view").hidden = true;
+        }
+
+        async function loadFriends() {
+          await run("친구 목록 불러오기", async () => {
+            friends = await api("/friends");
+            renderFriendList();
+          });
+        }
+
+        function renderFriendList() {
+          $("friend-empty").hidden = friends.length > 0;
+          $("friend-list").replaceChildren(...friends.map((friend) => {
+            const li = document.createElement("li");
+            const name = Object.assign(document.createElement("span"), {
+              textContent: friend.username, className: "friend-name",
+            });
+            li.append(
+              name,
+              button("할 일 보기", () => openFriendTodos(friend)),
+              button("삭제", () => removeFriend(friend)),
+            );
+            return li;
+          }));
+        }
+
+        function removeFriend(friend) {
+          run("친구 삭제", async () => {
+            await api(`/friends/${friend.id}`, "DELETE");
+            await loadFriends();
+          });
+        }
+
+        function openFriendTodos(friend) {
+          currentFriend = friend;
+          $("friend-todos-title").textContent = `${friend.username}님의 할 일`;
+          $("friend-list-view").hidden = true;
+          $("friend-todos-view").hidden = false;
+          loadFriendTodos();
+        }
+
+        async function loadFriendTodos() {
+          if (!currentFriend) return;
+          await run("친구 할 일 불러오기", async () => {
+            const todos = await api(`/friends/${currentFriend.id}/todos`);
+            renderFriendTodos(todos);
+          });
+        }
+
+        function renderFriendTodos(todos) {
+          $("friend-todo-list").replaceChildren(...todos.map((todo) => {
+            const li = document.createElement("li");
+            const main = document.createElement("div");
+            main.className = "friend-todo-main";
+            const text = Object.assign(document.createElement("span"), {
+              textContent: `${PRIORITY_LABEL[todo.priority]} ${todo.title} — ${todo.description}`,
+              className: todo.completed ? "done" : "",
+            });
+            main.append(text);
+            const due = formatDueDate(todo.due_date, todo.completed);
+            if (due) {
+              main.append(Object.assign(document.createElement("span"), {
+                textContent: due.text,
+                className: due.overdue ? "badge overdue" : "badge",
+              }));
+            }
+            const reactionBar = document.createElement("div");
+            reactionBar.className = "reaction-bar";
+            for (const emoji of REACTION_EMOJI) {
+              const count = todo.reaction_counts[emoji] ?? 0;
+              const btn = button(count ? `${emoji}` : emoji, () => toggleReaction(todo.id, emoji));
+              if (todo.my_reaction === emoji) btn.classList.add("picked");
+              if (count) btn.append(Object.assign(document.createElement("span"), {
+                textContent: count, className: "reaction-count",
+              }));
+              reactionBar.append(btn);
+            }
+            li.append(main, reactionBar);
+            return li;
+          }));
+        }
+
+        function toggleReaction(todoId, emoji) {
+          run("반응 남기기", async () => {
+            await api(`/todos/${todoId}/reactions`, "POST", { emoji });
+            await loadFriendTodos();
+          });
+        }
+
+        $("friends-toggle-btn").onclick = () => {
+          $("friends-card").hidden = false;
+          showFriendListView();
+          loadFriends();
+        };
+        $("friend-back-btn").onclick = showFriendListView;
+
+        $("add-friend-form").onsubmit = (event) => {
+          event.preventDefault();
+          const input = $("friend-code-input");
+          const code = input.value.trim();
+          if (!code) return;
+          (async () => {
+            try {
+              await api("/friends", "POST", { friend_code: code });
+              $("friend-error").hidden = true;
+              input.value = "";
+              await loadFriends();
+            } catch (e) {
+              $("friend-error").textContent = `친구 추가 실패: ${e.message}`;
+              $("friend-error").hidden = false;
+            }
+          })();
+        };
 
         load();
         loadVersion();

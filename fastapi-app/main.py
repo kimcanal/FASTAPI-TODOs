@@ -34,6 +34,8 @@ RELEASE_NOTES_TEMPLATE = BASE_DIR / "templates" / "release_notes.html"
 
 PBKDF2_ITERATIONS = 200_000
 TRASH_RETENTION_DAYS = 7                         # 휴지통 보관 기간 — 이 기간이 지나면 완전히 삭제
+FRIEND_CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"   # 0/O, 1/I/L 등 헷갈리는 글자 제외
+REACTION_EMOJI = ("👍", "❤️", "🔥", "😂", "😮", "👏")
 
 
 @contextlib.contextmanager
@@ -54,6 +56,18 @@ def get_db():
         conn.close()
 
 
+def _assign_friend_code(conn: sqlite3.Connection, user_id: int) -> str:
+    # 충돌 가능성은 희박하지만(6자리, 32종 알파벳), 유니크 인덱스 위반 시 다시 뽑는다
+    for _ in range(5):
+        code = "".join(secrets.choice(FRIEND_CODE_ALPHABET) for _ in range(6))
+        try:
+            conn.execute("UPDATE users SET friend_code = ? WHERE id = ?", (code, user_id))
+            return code
+        except sqlite3.IntegrityError:
+            continue
+    raise RuntimeError("친구 코드를 생성하지 못했습니다")
+
+
 def init_db() -> None:
     with get_db() as conn:
         conn.execute(
@@ -62,10 +76,18 @@ def init_db() -> None:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
-                password_salt TEXT NOT NULL
+                password_salt TEXT NOT NULL,
+                friend_code TEXT
             )
             """
         )
+        # 기존 DB(볼륨)에 이미 users 테이블이 있던 경우를 위한 마이그레이션
+        existing_user_columns = {row["name"] for row in conn.execute("PRAGMA table_info(users)")}
+        if "friend_code" not in existing_user_columns:
+            conn.execute("ALTER TABLE users ADD COLUMN friend_code TEXT")
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_friend_code ON users (friend_code)")
+        for row in conn.execute("SELECT id FROM users WHERE friend_code IS NULL"):
+            _assign_friend_code(conn, row["id"])
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS todos (
@@ -97,6 +119,27 @@ def init_db() -> None:
                 user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
                 last_completed_date TEXT,
                 streak INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS friendships (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                friend_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (user_id, friend_id)
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS todo_reactions (
+                todo_id INTEGER NOT NULL REFERENCES todos(id) ON DELETE CASCADE,
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                emoji TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                PRIMARY KEY (todo_id, user_id)
             )
             """
         )
@@ -203,12 +246,30 @@ class AuthIn(BaseModel):
     password: str = Field(min_length=4, max_length=100)
 
 
+class FriendCodeIn(BaseModel):
+    friend_code: str = Field(min_length=6, max_length=6)
+
+
+class FriendOut(BaseModel):
+    id: int
+    username: str
+
+
+class FriendTodoItem(TodoItem):                  # 친구 할 일 목록용 — 이모지 반응 포함
+    reaction_counts: dict[str, int]
+    my_reaction: str | None
+
+
+class ReactionIn(BaseModel):
+    emoji: Literal["👍", "❤️", "🔥", "😂", "😮", "👏"]
+
+
 def get_current_user(request: Request) -> sqlite3.Row:
     user_id = request.session.get("user_id")
     if user_id is None:
         raise HTTPException(401, "로그인이 필요합니다")
     with get_db() as conn:
-        user = conn.execute("SELECT id, username FROM users WHERE id = ?", (user_id,)).fetchone()
+        user = conn.execute("SELECT id, username, friend_code FROM users WHERE id = ?", (user_id,)).fetchone()
     if user is None:
         request.session.clear()
         raise HTTPException(401, "로그인이 필요합니다")
@@ -269,6 +330,7 @@ def register(payload: AuthIn, request: Request) -> dict:
         except sqlite3.IntegrityError:
             raise HTTPException(409, "이미 사용 중인 아이디입니다")
         user_id = cur.lastrowid
+        _assign_friend_code(conn, user_id)
     request.session["user_id"] = user_id
     return {"username": payload.username}
 
@@ -294,7 +356,7 @@ def logout(request: Request) -> dict:
 
 @app.get("/auth/me")                             # 현재 로그인한 사용자 확인
 def me(user: sqlite3.Row = Depends(get_current_user)) -> dict:
-    return {"username": user["username"]}
+    return {"id": user["id"], "username": user["username"], "friend_code": user["friend_code"]}
 
 
 @app.get("/todos")                               # 목록 조회 (completed/검색/정렬 가능, 본인 것만)
@@ -399,6 +461,109 @@ def get_stats(user: sqlite3.Row = Depends(get_current_user)) -> dict:
     with get_db() as conn:
         streak = _recompute_streak(conn, user["id"])
     return {"streak": streak}
+
+
+@app.get("/friends")                             # 친구 목록 조회
+def list_friends(user: sqlite3.Row = Depends(get_current_user)) -> list[FriendOut]:
+    with get_db() as conn:
+        rows = conn.execute(
+            "SELECT u.id, u.username FROM friendships f JOIN users u ON u.id = f.friend_id "
+            "WHERE f.user_id = ? ORDER BY u.username",
+            (user["id"],),
+        ).fetchall()
+    return [FriendOut(id=row["id"], username=row["username"]) for row in rows]
+
+
+@app.post("/friends", status_code=201)           # 친구 코드로 추가 — 요청/수락 없이 바로 양방향 연결
+def add_friend(payload: FriendCodeIn, user: sqlite3.Row = Depends(get_current_user)) -> FriendOut:
+    code = payload.friend_code.strip().upper()
+    with get_db() as conn:
+        friend = conn.execute("SELECT id, username FROM users WHERE friend_code = ?", (code,)).fetchone()
+        if friend is None:
+            raise HTTPException(404, "친구 코드를 찾을 수 없습니다")
+        if friend["id"] == user["id"]:
+            raise HTTPException(400, "본인을 친구로 추가할 수 없습니다")
+        now = datetime.now(timezone.utc).isoformat()
+        conn.execute(
+            "INSERT OR IGNORE INTO friendships (user_id, friend_id, created_at) VALUES (?, ?, ?)",
+            (user["id"], friend["id"], now),
+        )
+        conn.execute(
+            "INSERT OR IGNORE INTO friendships (user_id, friend_id, created_at) VALUES (?, ?, ?)",
+            (friend["id"], user["id"], now),
+        )
+    return FriendOut(id=friend["id"], username=friend["username"])
+
+
+@app.delete("/friends/{friend_id}", status_code=204)   # 친구 삭제 — 양방향 모두 해제
+def remove_friend(friend_id: int, user: sqlite3.Row = Depends(get_current_user)) -> None:
+    with get_db() as conn:
+        conn.execute("DELETE FROM friendships WHERE user_id = ? AND friend_id = ?", (user["id"], friend_id))
+        conn.execute("DELETE FROM friendships WHERE user_id = ? AND friend_id = ?", (friend_id, user["id"]))
+
+
+@app.get("/friends/{friend_id}/todos")            # 친구의 할 일 조회 (읽기 전용, 친구가 아니면 403)
+def get_friend_todos(friend_id: int, user: sqlite3.Row = Depends(get_current_user)) -> list[FriendTodoItem]:
+    with get_db() as conn:
+        is_friend = conn.execute(
+            "SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?", (user["id"], friend_id)
+        ).fetchone()
+        if is_friend is None:
+            raise HTTPException(403, "친구가 아닙니다")
+        todo_rows = conn.execute(
+            "SELECT id, title, description, completed, priority, due_date FROM todos "
+            "WHERE user_id = ? AND deleted_at IS NULL ORDER BY id",
+            (friend_id,),
+        ).fetchall()
+        items = []
+        for row in todo_rows:
+            reaction_rows = conn.execute(
+                "SELECT emoji, user_id FROM todo_reactions WHERE todo_id = ?", (row["id"],)
+            ).fetchall()
+            counts: dict[str, int] = {}
+            my_reaction = None
+            for reaction in reaction_rows:
+                counts[reaction["emoji"]] = counts.get(reaction["emoji"], 0) + 1
+                if reaction["user_id"] == user["id"]:
+                    my_reaction = reaction["emoji"]
+            items.append(FriendTodoItem(
+                **_row_to_todo(row).model_dump(), reaction_counts=counts, my_reaction=my_reaction,
+            ))
+    return items
+
+
+@app.post("/todos/{todo_id}/reactions")          # 친구 할 일에 이모지 반응 토글 (같은 이모지 다시 누르면 취소)
+def react_to_todo(todo_id: int, payload: ReactionIn, user: sqlite3.Row = Depends(get_current_user)) -> dict:
+    with get_db() as conn:
+        todo = conn.execute(
+            "SELECT user_id FROM todos WHERE id = ? AND deleted_at IS NULL", (todo_id,)
+        ).fetchone()
+        if todo is None:
+            raise HTTPException(404, "할 일을 찾을 수 없습니다")
+        owner_id = todo["user_id"]
+        if owner_id == user["id"]:
+            raise HTTPException(400, "본인 할 일에는 반응을 남길 수 없습니다")
+        is_friend = conn.execute(
+            "SELECT 1 FROM friendships WHERE user_id = ? AND friend_id = ?", (user["id"], owner_id)
+        ).fetchone()
+        if is_friend is None:
+            raise HTTPException(403, "친구가 아닙니다")
+        existing = conn.execute(
+            "SELECT emoji FROM todo_reactions WHERE todo_id = ? AND user_id = ?", (todo_id, user["id"])
+        ).fetchone()
+        if existing is not None and existing["emoji"] == payload.emoji:
+            conn.execute(
+                "DELETE FROM todo_reactions WHERE todo_id = ? AND user_id = ?", (todo_id, user["id"])
+            )
+            reacted = None
+        else:
+            conn.execute(
+                "INSERT INTO todo_reactions (todo_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(todo_id, user_id) DO UPDATE SET emoji = excluded.emoji, created_at = excluded.created_at",
+                (todo_id, user["id"], payload.emoji, datetime.now(timezone.utc).isoformat()),
+            )
+            reacted = payload.emoji
+    return {"reaction": reacted}
 
 
 @app.post("/todos", status_code=201)             # 추가 — id 는 DB가 매긴다

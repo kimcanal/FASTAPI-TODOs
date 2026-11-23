@@ -48,7 +48,9 @@ def test_register_creates_session_and_me_reflects_it(client):
     register(client, "alice", "secret1")
     response = client.get("/auth/me")
     assert response.status_code == 200
-    assert response.json() == {"username": "alice"}
+    body = response.json()
+    assert body["username"] == "alice"
+    assert len(body["friend_code"]) == 6
 
 
 def test_duplicate_username_is_rejected(client):
@@ -70,7 +72,7 @@ def test_login_with_correct_password_succeeds(client):
     fresh = TestClient(main.app)
     response = fresh.post("/auth/login", json={"username": "alice", "password": "secret1"})
     assert response.status_code == 200
-    assert fresh.get("/auth/me").json() == {"username": "alice"}
+    assert fresh.get("/auth/me").json()["username"] == "alice"
 
 
 def test_logout_clears_session(client):
@@ -400,6 +402,103 @@ def test_stats_streak_increments_once_per_day_when_all_done(client):
     assert client.get("/stats").json()["streak"] == 1
     # 같은 날 다시 조회해도 중복으로 올라가지 않는다
     assert client.get("/stats").json()["streak"] == 1
+
+
+def test_add_friend_by_code_links_both_directions(client):
+    register(client, "alice", "secret1")
+    alice_code = client.get("/auth/me").json()["friend_code"]
+
+    bob = TestClient(main.app)
+    register(bob, "bob", "secret1")
+
+    response = bob.post("/friends", json={"friend_code": alice_code})
+    assert response.status_code == 201
+    assert response.json()["username"] == "alice"
+    assert [f["username"] for f in bob.get("/friends").json()] == ["alice"]
+    assert [f["username"] for f in client.get("/friends").json()] == ["bob"]
+
+
+def test_add_friend_with_unknown_code_is_404(client):
+    register(client, "alice", "secret1")
+    assert client.post("/friends", json={"friend_code": "ZZZZZZ"}).status_code == 404
+
+
+def test_add_self_as_friend_is_rejected(client):
+    register(client, "alice", "secret1")
+    code = client.get("/auth/me").json()["friend_code"]
+    assert client.post("/friends", json={"friend_code": code}).status_code == 400
+
+
+def test_remove_friend_unlinks_both_directions(client):
+    register(client, "alice", "secret1")
+    alice_code = client.get("/auth/me").json()["friend_code"]
+    bob = TestClient(main.app)
+    register(bob, "bob", "secret1")
+    bob.post("/friends", json={"friend_code": alice_code})
+    bob_id = client.get("/friends").json()[0]["id"]
+
+    assert client.delete(f"/friends/{bob_id}").status_code == 204
+    assert client.get("/friends").json() == []
+    assert bob.get("/friends").json() == []
+
+
+def test_friend_can_view_and_toggle_reaction(client):
+    register(client, "alice", "secret1")
+    created = client.post("/todos", json={"title": "밥 먹기"}).json()
+    alice_id = client.get("/auth/me").json()["id"]
+    alice_code = client.get("/auth/me").json()["friend_code"]
+
+    bob = TestClient(main.app)
+    register(bob, "bob", "secret1")
+    bob.post("/friends", json={"friend_code": alice_code})
+
+    friend_todos = bob.get(f"/friends/{alice_id}/todos").json()
+    assert friend_todos[0]["title"] == "밥 먹기"
+    assert friend_todos[0]["my_reaction"] is None
+    assert friend_todos[0]["reaction_counts"] == {}
+
+    react = bob.post(f"/todos/{created['id']}/reactions", json={"emoji": "👍"})
+    assert react.status_code == 200
+    assert react.json() == {"reaction": "👍"}
+    friend_todos = bob.get(f"/friends/{alice_id}/todos").json()
+    assert friend_todos[0]["my_reaction"] == "👍"
+    assert friend_todos[0]["reaction_counts"] == {"👍": 1}
+
+    # 같은 이모지를 다시 누르면 반응이 취소된다
+    toggled_off = bob.post(f"/todos/{created['id']}/reactions", json={"emoji": "👍"})
+    assert toggled_off.json() == {"reaction": None}
+    assert bob.get(f"/friends/{alice_id}/todos").json()[0]["reaction_counts"] == {}
+
+
+def test_cannot_react_to_own_todo(client):
+    register(client, "alice", "secret1")
+    created = client.post("/todos", json={"title": "할 일"}).json()
+    assert client.post(f"/todos/{created['id']}/reactions", json={"emoji": "👍"}).status_code == 400
+
+
+def test_non_friend_cannot_view_or_react(client):
+    register(client, "alice", "secret1")
+    created = client.post("/todos", json={"title": "할 일"}).json()
+    alice_id = client.get("/auth/me").json()["id"]
+
+    bob = TestClient(main.app)
+    register(bob, "bob", "secret1")
+
+    assert bob.get(f"/friends/{alice_id}/todos").status_code == 403
+    assert bob.post(f"/todos/{created['id']}/reactions", json={"emoji": "👍"}).status_code == 403
+
+
+def test_invalid_reaction_emoji_is_rejected(client):
+    register(client, "alice", "secret1")
+    created = client.post("/todos", json={"title": "할 일"}).json()
+    alice_code = client.get("/auth/me").json()["friend_code"]
+
+    bob = TestClient(main.app)
+    register(bob, "bob", "secret1")
+    bob.post("/friends", json={"friend_code": alice_code})
+
+    response = bob.post(f"/todos/{created['id']}/reactions", json={"emoji": "🙂"})
+    assert response.status_code == 422
 
 
 def test_data_dir_env_moves_db_and_secret(tmp_path, monkeypatch):

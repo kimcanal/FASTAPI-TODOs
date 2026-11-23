@@ -3,46 +3,46 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>투두 프린세스 · Release Notes</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>👑</text></svg>">
+    <title>할 일 목록 · 릴리스 노트</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Crect x='3' y='3' width='18' height='18' rx='2' fill='none' stroke='%231E2620' stroke-width='2'/%3E%3Cpath d='M7 12l3 3 7-7' fill='none' stroke='%231E2620' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Jua&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.css">
     <style>
         :root {
-            --bg-pink: #ffd6ec;
-            --bg-lavender: #f1dcff;
-            --card: #fff6fb;
-            --card-border: #f0c869;
-            --ink: #6b3a52;
-            --muted: #b98aa5;
-            --accent: #ec6ba1;
-            --cursor-icon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='24' font-size='26'%3E%F0%9F%91%91%3C/text%3E%3C/svg%3E") 6 6, auto;
+            --paper: #eef0e6;
+            --surface: #f8f9f2;
+            --ink: #1e2620;
+            --muted: #6b7262;
+            --rule: #c7d0be;
+            --accent: #8c3229;
         }
         * { box-sizing: border-box; }
-        html, body { cursor: var(--cursor-icon); }
         body {
-            font-family: "Jua", "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+            font-family: "Pretendard Variable", "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+            width: 100%;
             max-width: 640px;
-            margin: 3rem auto;
-            padding: 0 1rem;
+            margin-inline: auto;
+            margin-block: clamp(1rem, 5vh, 2.5rem) 2rem;
+            padding-inline: clamp(1rem, 4vw, 1.5rem);
             color: var(--ink);
-            background: linear-gradient(165deg, var(--bg-pink) 0%, var(--bg-pink) 35%, var(--bg-lavender) 100%);
+            background:
+                repeating-linear-gradient(var(--paper) 0 27px, var(--rule) 27px 28px),
+                var(--paper);
             min-height: 100vh;
+            min-height: 100svh;
         }
-        @media (max-width: 480px) {
-            body { margin: 1.5rem auto; }
-            .card { padding: 1.1rem 1.25rem; border-radius: 12px; }
-        }
-        h1 { font-size: 1.6rem; margin: 0 0 1.25rem; letter-spacing: -.02rem; }
+        @media (max-height: 480px) { body { margin-block: 1rem 1.25rem; } }
+        :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+        h1 { font-family: "Gowun Batang", serif; font-weight: 700; font-size: clamp(1.3rem, 4vw + .5rem, 1.55rem); margin: 0 0 1.25rem; }
         .card {
-            background: var(--card);
-            border: 3px solid var(--card-border);
-            border-radius: 22px;
-            padding: 1.5rem 1.75rem;
-            box-shadow: 0 10px 30px -14px rgba(214, 51, 132, .22);
+            background: var(--surface);
+            border: 1px solid var(--rule);
+            border-radius: 10px;
+            padding: clamp(1.1rem, 4vw, 1.4rem) clamp(1.25rem, 4vw, 1.6rem);
         }
-        .card h2 { font-size: 1.15rem; margin: 1.5rem 0 .5rem; }
+        .card h2 { font-family: "Gowun Batang", serif; font-size: 1.1rem; margin: 1.5rem 0 .5rem; }
         .card h2:first-child { margin-top: 0; }
         .card h3 { font-size: .95rem; color: var(--muted); margin: 1rem 0 .4rem; }
         .card ul { margin: 0 0 .5rem; padding-left: 1.2rem; }
@@ -51,15 +51,14 @@
         a.back {
             display: inline-block;
             margin-bottom: 1rem;
-            color: var(--accent);
-            text-decoration: none;
+            color: var(--ink);
+            text-decoration: underline;
             font-size: .9rem;
         }
-        a.back:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
-    <h1>👑 Release Notes</h1>
+    <h1>릴리스 노트</h1>
     <a class="back" href="/">← 할 일 목록으로 돌아가기</a>
     <div class="card">
         <!--CONTENT-->
