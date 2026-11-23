@@ -11,9 +11,9 @@
 - 회원가입(학번) / 로그인 / 로그아웃 — 세션 쿠키 기반, 계정별로 할 일이 완전히 분리됩니다. 초기 비밀번호는 0000이며, 로그인 후 계정 패널에서 변경할 수 있습니다
 - 할 일 추가 / 목록 조회(전체·진행중·완료 필터) / 인라인 수정 / 삭제
 - 우선순위(중요/보통)·마감일 지정, 지난 마감일은 목록에서 강조 표시
-- 제목·설명 검색, 마감일순/우선순위순 정렬
+- 제목·설명 검색. 목록은 "중요" 구역이 항상 위, "보통" 구역이 항상 아래로 고정되고 각 구역 안에서는 마감일이 빠른 순으로 자동 정렬됩니다
 - 할 일을 모두 끝내면 축하 배너 표시 + 매일 전부 완료 시 연속 달성 스트릭 집계(`GET /stats`)
-- 친구 코드로 친구 추가(승인 절차 없이 바로 양방향 연결), 친구의 할 일을 읽기 전용으로 보고 이모지로 반응 남기기
+- 학번으로 친구 추가(승인 절차 없이 바로 양방향 연결), 친구의 할 일을 읽기 전용으로 보고 이모지로 반응 남기기 — 받은 반응은 본인 목록에도 읽기 전용 배지로 표시됩니다
 - 모바일 화면 대응 (iOS 자동 확대 방지, 좁은 화면 레이아웃)
 - 현재 버전 및 릴리스 노트 확인 (`GET /api/version`, `GET /release-notes`)
 - 배포/모니터링용 헬스체크 (`GET /health`), Docker `HEALTHCHECK`로 `docker ps`에 `healthy` 표시
@@ -50,9 +50,11 @@ fastapi-app/
 │   ├── index.html           # 할 일 목록 화면
 │   ├── login.html           # 로그인 / 회원가입 화면
 │   └── release_notes.html   # 릴리스 노트 화면
-└── tests/
-    ├── test_main.py                   # 단위 테스트 (TestClient, 100% 커버리지)
-    └── test_integration_deployed.py   # 배포 환경 API 통합 테스트 (실제 HTTP, `-m integration`)
+├── tests/
+│   ├── test_main.py                   # 단위 테스트 (TestClient, 100% 커버리지)
+│   └── test_integration_deployed.py   # 배포 환경 API 통합 테스트 (실제 HTTP, `-m integration`)
+└── scripts/
+    └── seed_demo_data.py        # 발표/데모용 샘플 데이터(계정·할 일·친구·반응) 채우기
 ui-tests/                     # Playwright UI 테스트 (배포된 앱을 브라우저로 조작)
 alloy/
 └── config.alloy             # Alloy가 fastapi-app 컨테이너 로그를 찾아 Loki로 push하는 설정
