@@ -234,9 +234,10 @@
         footer a { text-decoration: underline; }
         #user-bar {
             display: flex;
+            flex-wrap: wrap;
             justify-content: flex-end;
             align-items: center;
-            gap: .6rem;
+            gap: .4rem .5rem;
             margin-bottom: .5rem;
             font-size: .85rem;
             color: var(--muted);
@@ -245,8 +246,9 @@
             background: transparent;
             border: 1px solid var(--rule);
             color: var(--muted);
-            padding: .3rem .7rem;
-            font-size: .8rem;
+            padding: .3rem .6rem;
+            font-size: .78rem;
+            white-space: nowrap;
         }
         #user-bar button:hover { background: var(--surface); }
         #undo-toast {
@@ -301,6 +303,88 @@
             cursor: pointer;
         }
         #csv-tools button:hover, #csv-tools label:hover { background: var(--paper); }
+        #calendar-card { margin-top: 1rem; }
+        #calendar-header {
+            display: flex;
+            align-items: center;
+            gap: .5rem;
+            margin-bottom: .75rem;
+        }
+        #calendar-header h2 {
+            font-family: "Gowun Batang", serif;
+            font-size: 1.05rem;
+            margin: 0;
+            flex: 1;
+            text-align: center;
+        }
+        #cal-prev-btn, #cal-next-btn { padding: .4rem .7rem; }
+        #calendar-weekdays, #calendar-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+        }
+        #calendar-weekdays {
+            font-size: .75rem;
+            color: var(--muted);
+            text-align: center;
+            padding-bottom: .4rem;
+            border-bottom: 1px solid var(--rule);
+        }
+        .cal-cell {
+            min-height: 2.6rem;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: .15rem;
+            padding: .3rem 0;
+            border-bottom: 1px solid var(--rule);
+            cursor: pointer;
+        }
+        .cal-cell.cal-empty { cursor: default; }
+        .cal-cell:not(.cal-empty):hover { background: var(--paper); }
+        .cal-daynum {
+            font-size: .8rem;
+            width: 1.5rem;
+            height: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+        .cal-cell.cal-today .cal-daynum { background: var(--ink); color: var(--surface); }
+        .cal-cell.cal-selected { background: var(--paper); }
+        .cal-dots { display: flex; gap: .2rem; height: .4rem; }
+        .cal-dot {
+            width: .35rem;
+            height: .35rem;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .cal-dot.todo { background: var(--ink); }
+        .cal-dot.event { background: var(--accent); }
+        #calendar-legend {
+            display: flex;
+            gap: 1rem;
+            margin: .6rem 0;
+            font-size: .78rem;
+            color: var(--muted);
+        }
+        #calendar-legend span { display: flex; align-items: center; gap: .3rem; }
+        #calendar-agenda {
+            margin-top: .5rem;
+            padding-top: .75rem;
+            border-top: 1px solid var(--rule);
+        }
+        #calendar-agenda h3 {
+            font-family: "Gowun Batang", serif;
+            font-size: .95rem;
+            margin: 0 0 .5rem;
+        }
+        #calendar-agenda-list li { padding: .4rem .25rem; }
+        #calendar-agenda-list .cal-event-label {
+            color: var(--accent);
+            font-weight: 600;
+        }
+        #calendar-agenda-empty { color: var(--muted); font-size: .85rem; padding: .25rem; }
         #account-card { margin-top: 1rem; }
         #account-card h2 { font-family: "Gowun Batang", serif; font-size: 1.05rem; margin: 0 0 1rem; }
         #password-form { flex-direction: column; }
@@ -354,6 +438,7 @@
     <div id="user-bar">
         <span id="streak-info"></span>
         <span id="username-info"></span>
+        <button type="button" id="calendar-toggle-btn">캘린더</button>
         <button type="button" id="friends-toggle-btn">친구</button>
         <button type="button" id="trash-toggle-btn">휴지통</button>
         <button type="button" id="account-toggle-btn">계정</button>
@@ -386,6 +471,26 @@
             <input type="file" id="import-input" accept=".csv,text/csv" hidden>
         </div>
         <ul id="todo-list"></ul>
+    </div>
+    <div class="card" id="calendar-card" hidden>
+        <div id="calendar-header">
+            <button type="button" id="cal-prev-btn">‹</button>
+            <h2 id="calendar-month-label"></h2>
+            <button type="button" id="cal-next-btn">›</button>
+        </div>
+        <div id="calendar-weekdays">
+            <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+        </div>
+        <div id="calendar-grid"></div>
+        <div id="calendar-legend">
+            <span><span class="cal-dot todo"></span>할 일</span>
+            <span><span class="cal-dot event"></span>학사일정</span>
+        </div>
+        <div id="calendar-agenda">
+            <h3 id="calendar-agenda-title"></h3>
+            <ul id="calendar-agenda-list"></ul>
+            <p id="calendar-agenda-empty" hidden>일정이 없어요.</p>
+        </div>
     </div>
     <div class="card" id="trash-card" hidden>
         <div id="trash-header">
@@ -502,7 +607,11 @@
           }
         }
 
-        const load = () => run("목록 불러오기", async () => { allTodos = await api("/todos"); render(); });
+        const load = () => run("목록 불러오기", async () => {
+          allTodos = await api("/todos");
+          render();
+          if (!$("calendar-card").hidden) renderCalendar();
+        });
         const save = (id, todo) => run("수정", async () => { await api(`/todos/${id}`, "PUT", todo); await load(); await loadStats(); });
 
         function button(label, onclick) {
@@ -794,6 +903,126 @@
           await api("/auth/logout", "POST");
           location.href = "/login";
         });
+
+        // ── 캘린더 ──
+        // 서강대학교 공식 학사일정(https://www.sogang.ac.kr/ko/academic-support/calendar)에서
+        // 수동으로 옮겨 적은 값 — 학기가 바뀌면 여기를 직접 갱신해야 한다 (API 연동 없음)
+        const ACADEMIC_EVENTS = [
+          { start: "2026-03-03", end: "2026-03-03", label: "개강(1학기)" },
+          { start: "2026-03-03", end: "2026-03-09", label: "수강변경" },
+          { start: "2026-04-21", end: "2026-04-27", label: "중간고사(1학기)" },
+          { start: "2026-06-16", end: "2026-06-22", label: "기말고사(1학기)" },
+          { start: "2026-06-23", end: "2026-06-23", label: "여름방학 시작" },
+          { start: "2026-09-01", end: "2026-09-01", label: "개강(2학기)" },
+          { start: "2026-09-01", end: "2026-09-07", label: "수강변경" },
+          { start: "2026-10-20", end: "2026-10-26", label: "중간고사(2학기)" },
+          { start: "2026-12-15", end: "2026-12-21", label: "기말고사(2학기)" },
+          { start: "2026-12-20", end: "2026-12-20", label: "종강미사" },
+          { start: "2026-12-22", end: "2026-12-22", label: "겨울방학 시작" },
+        ];
+
+        let calendarMonth = new Date();
+        calendarMonth.setDate(1);
+        let selectedDate = new Date().toISOString().slice(0, 10);
+
+        function pad2(n) { return String(n).padStart(2, "0"); }
+        function dateStr(y, m, d) { return `${y}-${pad2(m + 1)}-${pad2(d)}`; }
+
+        function eventsForDate(ds) {
+          return ACADEMIC_EVENTS.filter((e) => ds >= e.start && ds <= e.end);
+        }
+
+        function renderCalendarAgenda() {
+          const todos = allTodos.filter((t) => t.due_date === selectedDate);
+          const events = eventsForDate(selectedDate);
+          const [y, m, d] = selectedDate.split("-");
+          $("calendar-agenda-title").textContent = `${y}년 ${Number(m)}월 ${Number(d)}일`;
+          $("calendar-agenda-empty").hidden = todos.length > 0 || events.length > 0;
+          $("calendar-agenda-list").replaceChildren(
+            ...events.map((e) => {
+              const li = document.createElement("li");
+              li.append(Object.assign(document.createElement("span"), {
+                className: "cal-event-label", textContent: e.label,
+              }));
+              return li;
+            }),
+            ...todos.map((todo) => {
+              const li = document.createElement("li");
+              li.append(...todoContentNodes(todo));
+              return li;
+            }),
+          );
+        }
+
+        function selectCalendarDate(ds) {
+          selectedDate = ds;
+          for (const cell of document.querySelectorAll(".cal-cell")) {
+            cell.classList.toggle("cal-selected", cell.dataset.date === ds);
+          }
+          renderCalendarAgenda();
+        }
+
+        function renderCalendar() {
+          const year = calendarMonth.getFullYear();
+          const month = calendarMonth.getMonth();
+          $("calendar-month-label").textContent = `${year}년 ${month + 1}월`;
+
+          const firstWeekday = new Date(year, month, 1).getDay();
+          const daysInMonth = new Date(year, month + 1, 0).getDate();
+          const todayStr = new Date().toISOString().slice(0, 10);
+
+          const todosByDate = {};
+          for (const todo of allTodos) {
+            if (!todo.due_date) continue;
+            (todosByDate[todo.due_date] ??= []).push(todo);
+          }
+
+          const cells = [];
+          for (let i = 0; i < firstWeekday; i++) {
+            cells.push(Object.assign(document.createElement("div"), { className: "cal-cell cal-empty" }));
+          }
+          for (let day = 1; day <= daysInMonth; day++) {
+            const ds = dateStr(year, month, day);
+            const cell = document.createElement("div");
+            cell.className = "cal-cell";
+            cell.dataset.date = ds;
+            if (ds === todayStr) cell.classList.add("cal-today");
+            if (ds === selectedDate) cell.classList.add("cal-selected");
+            cell.onclick = () => selectCalendarDate(ds);
+
+            cell.append(Object.assign(document.createElement("span"), {
+              className: "cal-daynum", textContent: day,
+            }));
+
+            const dots = document.createElement("div");
+            dots.className = "cal-dots";
+            if ((todosByDate[ds] || []).length > 0) {
+              dots.append(Object.assign(document.createElement("span"), { className: "cal-dot todo" }));
+            }
+            if (eventsForDate(ds).length > 0) {
+              dots.append(Object.assign(document.createElement("span"), { className: "cal-dot event" }));
+            }
+            cell.append(dots);
+
+            cells.push(cell);
+          }
+          $("calendar-grid").replaceChildren(...cells);
+          renderCalendarAgenda();
+        }
+
+        $("cal-prev-btn").onclick = () => {
+          calendarMonth.setMonth(calendarMonth.getMonth() - 1);
+          renderCalendar();
+        };
+        $("cal-next-btn").onclick = () => {
+          calendarMonth.setMonth(calendarMonth.getMonth() + 1);
+          renderCalendar();
+        };
+        $("calendar-toggle-btn").onclick = () => {
+          const show = $("calendar-card").hidden;
+          $("calendar-card").hidden = !show;
+          if (show) renderCalendar();
+        };
 
         // ── 친구 ──
         const REACTION_EMOJI = ["👍", "❤️", "🔥", "😂", "😮", "👏"];
